@@ -1,4 +1,4 @@
-Install the plugin by placing it in the Plugins folder in the project's root folder.
+Install the plugin by placing BlueprintDebugExtension Folder in the Plugins folder in the project's root folder.
 
 Open Settings Here:
 
