@@ -1,0 +1,106 @@
+{
+	"Entries": [
+		{
+			"BlueprintPath": "/BlueprintDebugExtension/BP_BlueprintDebugExtension_TestActor.BP_BlueprintDebugExtension_TestActor",
+			"NodeGuid": "A6AA968F4F7C864FB94A2E88937FBA20",
+			"Conditions": [
+				{
+					"ConditionType": 0,
+					"HasConditionObject": true,
+					"ConditionClass": "/Script/BlueprintDebugExtension.FunctionBindingDebugCondition",
+					"Properties":
+					{
+						"FunctionName": "Debug_BreakpointExtention_1"
+					}
+				}
+			]
+		},
+		{
+			"BlueprintPath": "/BlueprintDebugExtension/BP_BlueprintDebugExtension_TestActor.BP_BlueprintDebugExtension_TestActor",
+			"NodeGuid": "93D844954FE9CF0E97492A9DD3C036AA",
+			"Conditions": [
+				{
+					"ConditionType": 0,
+					"HasConditionObject": true,
+					"ConditionClass": "/Script/BlueprintDebugExtension.RepeatDebugCondition",
+					"Properties":
+					{
+						"ComparisonType": "Greater",
+						"Threshold": "2"
+					}
+				}
+			]
+		},
+		{
+			"BlueprintPath": "/BlueprintDebugExtension/BP_BlueprintDebugExtension_TestActor.BP_BlueprintDebugExtension_TestActor",
+			"NodeGuid": "2E63A929425BA319A1F9E7B6A1ECBD48",
+			"Conditions": [
+				{
+					"ConditionType": 0,
+					"HasConditionObject": true,
+					"ConditionClass": "/Script/BlueprintDebugExtension.CheckPropertyDebugCondition",
+					"Properties":
+					{
+						"Comparisons": "((LeftPropertyName=\"TestCounter\",RightPropertyName=\"TestCounter\",ConstantValue=\"1\"))"
+					}
+				}
+			]
+		},
+		{
+			"BlueprintPath": "/BlueprintDebugExtension/BP_BlueprintDebugExtension_TestActor.BP_BlueprintDebugExtension_TestActor",
+			"NodeGuid": "2171846642F3FE77F3CC36B74E298D0D",
+			"Conditions": [
+				{
+					"ConditionType": 0,
+					"HasConditionObject": true,
+					"ConditionClass": "/BlueprintDebugExtension/TestV1BaseBlueprintDebugCondition.TestV1BaseBlueprintDebugCondition_C",
+					"Properties":
+					{
+						"DrawDebugPoint": "True"
+					}
+				}
+			]
+		},
+		{
+			"BlueprintPath": "/BlueprintDebugExtension/BP_BlueprintDebugExtension_TestActor.BP_BlueprintDebugExtension_TestActor",
+			"NodeGuid": "7108AA2049DC5F0F120256B2F228EEBD",
+			"Conditions": [
+				{
+					"ConditionType": 0,
+					"HasConditionObject": true,
+					"ConditionClass": "/BlueprintDebugExtension/TestV2BaseBlueprintDebugCondition.TestV2BaseBlueprintDebugCondition_C",
+					"Properties":
+					{
+						"MinStackTime": "2"
+					}
+				}
+			]
+		},
+		{
+			"BlueprintPath": "/BlueprintDebugExtension/BP_BlueprintDebugExtension_TestActor.BP_BlueprintDebugExtension_TestActor",
+			"NodeGuid": "FE59FED0448C1AD91199A88122214889",
+			"Conditions": [
+				{
+					"ConditionType": 0,
+					"HasConditionObject": true,
+					"ConditionClass": "/Script/BlueprintDebugExtension.RepeatDebugCondition",
+					"Properties":
+					{
+						"ComparisonType": "Greater",
+						"Threshold": "3"
+					}
+				},
+				{
+					"ConditionType": 0,
+					"HasConditionObject": true,
+					"ConditionClass": "/Script/BlueprintDebugExtension.RepeatDebugCondition",
+					"Properties":
+					{
+						"ComparisonType": "Less",
+						"Threshold": "5"
+					}
+				}
+			]
+		}
+	]
+}
