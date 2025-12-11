@@ -37,3 +37,18 @@ In this case, you can get it for the Base Blueprint Extender Condition using Get
 You can find all the examples in the Content Plugin.
 
 
+Copy right rools.
+Requirement for Derivative Works.
+Any derivative work, fork, or plugin whose primary purpose is adding, managing, evaluating, or otherwise operating conditional breakpoints in Unreal Engine Blueprints must be fully open source and distributed under terms compatible with this license.
+
+Reuse for Other Primary Purposes.
+Projects that reuse the code for a different primary purpose (i.e., when the main purpose is not related to conditional breakpoint handling in Blueprints) may be closed-source or commercial. Such usage must include clear attribution to the original project (see example below) and must preserve the LICENSE/NOTICE files in the distributed package.
+
+Preservation of Author Files.
+You may not remove or alter the original LICENSE, NOTICE files, or any existing author headers in the source files. All author attributions and license headers must remain intact in the source code and, where reasonable, in binary distributions.
+
+“AS IS” and Warranty Disclaimer.
+The code is provided “AS IS”. The authors provide no warranties, express or implied, including but not limited to warranties of merchantability or fitness for a particular purpose. The authors accept no liability for any damages or losses arising from the use of this code.
+
+Right to Modify These Rules.
+The plugin author(s) reserve the right to modify these rules in future versions. Any changes become effective upon publication and do not apply retroactively to previously released versions unless explicitly stated.
