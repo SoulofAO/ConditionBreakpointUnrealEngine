@@ -46,7 +46,8 @@ void SConditionListWidget::Construct(const FArguments& InArgs)
 						{
 							FBlueprintDebugExtensionConditionData Copy;
 							Copy.ConditionType = Source.ConditionType;
-							Copy.Condition = Source.Condition ? DuplicateObject<UBlueprintDebugExtensionCondition>(Source.Condition, Subsystem) : nullptr;
+							Copy.Condition = Source.Condition ? DuplicateObject<UBlueprintDebugExtensionCondition>(Source.Condition, Subsystem) : nullptr;;
+							CopyConditions.Add(TStrongObjectPtr<UBlueprintDebugExtensionCondition>(Copy.Condition));
 							EditingConditions.Add(MoveTemp(Copy));
 						}
 					}
@@ -130,6 +131,11 @@ void SConditionListWidget::Construct(const FArguments& InArgs)
 TArray<FBlueprintDebugExtensionConditionData> SConditionListWidget::GetEditedConditions() const
 {
 	return EditingConditions;
+}
+
+SConditionListWidget::~SConditionListWidget()
+{
+	CopyConditions.Empty();
 }
 
 void SConditionListWidget::RebuildConditionsList()
@@ -307,6 +313,7 @@ void SConditionListWidget::AddNewConditionOfClass(UClass* ChosenClass)
 	NewEntry.ConditionType = EBlueprintDebugExtensionConditionType::And;
 	NewEntry.Condition = NewObject<UBlueprintDebugExtensionCondition>(GetTransientPackage(), ChosenClass);
 	EditingConditions.Add(MoveTemp(NewEntry));
+	CopyConditions.Add(TStrongObjectPtr<UBlueprintDebugExtensionCondition>(NewEntry.Condition));
 }
 
 void SConditionListWidget::RemoveConditionAt(int32 Index)
@@ -314,6 +321,7 @@ void SConditionListWidget::RemoveConditionAt(int32 Index)
 	if (EditingConditions.IsValidIndex(Index))
 	{
 		EditingConditions.RemoveAt(Index);
+		CopyConditions.RemoveAt(Index);
 	}
 }
 

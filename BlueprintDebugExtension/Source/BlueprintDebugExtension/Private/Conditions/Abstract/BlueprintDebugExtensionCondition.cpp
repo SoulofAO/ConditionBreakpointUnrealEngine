@@ -14,7 +14,7 @@ bool UBlueprintDebugExtensionCondition::CheckCondition(const UObject* ActiveObje
 
 bool UBlueprintDebugExtensionCondition::CheckValidCondition(UBlueprint* Blueprint) const
 {
-	return false;
+	return true;
 }
 
 TSharedPtr<SWidget> UBlueprintDebugExtensionCondition::InitializationWidget(UBlueprint* Blueprint)

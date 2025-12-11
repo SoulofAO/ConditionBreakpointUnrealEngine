@@ -74,6 +74,8 @@ public:
 
 	void AddNewConditions(UEdGraphNode* Node, TArray<FBlueprintDebugExtensionConditionData> NewConditions);
 
+	bool CheckValidConditions(UEdGraphNode* Node);
+
 	void RemoveCondition(UEdGraphNode* RemoveNode);
 
 	void PlaceTriggeredOnceBreakpoint(UBlueprint* Blueprint, const UEdGraphNode* Node);

@@ -30,6 +30,8 @@ public:
 
 	void Construct(const FArguments& InArgs);
 
+
+
 	void SetParentWindow(const TSharedRef<SWindow>& InWindow);
 
 private:

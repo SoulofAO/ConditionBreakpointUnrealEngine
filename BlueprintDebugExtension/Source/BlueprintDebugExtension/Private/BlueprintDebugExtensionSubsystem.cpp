@@ -100,10 +100,20 @@ void UBlueprintDebugExtensionSubsystem::AddNewConditions(UEdGraphNode* Node, TAr
             FKismetDebugUtilities::CreateBreakpoint(Blueprint, MutableNode, true);
         }
 
-        Node->Modify();
-        Node->NodeComment = TEXT("Has Custom Breakpoint");
-        Node->SetMakeCommentBubbleVisible(true);
-        Node->bCommentBubblePinned = true;
+        if (CheckValidConditions(Node))
+        {
+            Node->Modify();
+            Node->NodeComment = TEXT("Has Custom Breakpoint");
+            Node->SetMakeCommentBubbleVisible(true);
+            Node->bCommentBubblePinned = true;
+        }
+        else
+        {
+            Node->Modify();
+            Node->NodeComment = TEXT("Has Error Custom Breakpoint");
+            Node->SetMakeCommentBubbleVisible(true);
+            Node->bCommentBubblePinned = true;
+        }
     }
     else
     {
@@ -113,6 +123,28 @@ void UBlueprintDebugExtensionSubsystem::AddNewConditions(UEdGraphNode* Node, TAr
         Node->bCommentBubblePinned = false;
     }
 
+}
+
+bool UBlueprintDebugExtensionSubsystem::CheckValidConditions(UEdGraphNode* Node)
+{
+    if (!Conditions.Contains(Node))
+    {
+        return false;
+    }
+
+    UBlueprint* Blueprint = FBlueprintEditorUtils::FindBlueprintForNode(Node);
+
+    FBlueprintBreakpoint* BlueprintBreakpoint = FKismetDebugUtilities::FindBreakpointForNode(Node, Blueprint, false);
+
+    for (FBlueprintDebugExtensionConditionData ConditionData : Conditions.Find(Node)->Conditions)
+    {
+        if (!ConditionData.Condition->CheckValidCondition(Blueprint))
+        {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 void UBlueprintDebugExtensionSubsystem::RemoveCondition(UEdGraphNode* RemoveNode)
@@ -569,6 +601,7 @@ bool UBlueprintDebugExtensionSubsystem::CheckCondition(const UObject* ActiveObje
         return true;
     }
 
+    Conditions.Find(CurrentNode)->Context->BreakpointExecuteCount += 1;
     TArray<FBlueprintDebugExtensionConditionData> ConditionsForBreakpoint = Conditions.Find(CurrentNode)->Conditions;
 
     if (ConditionsForBreakpoint.Num() <= 0)
@@ -576,10 +609,14 @@ bool UBlueprintDebugExtensionSubsystem::CheckCondition(const UObject* ActiveObje
         return true;
     }
 
+    if(!CheckValidConditions(CurrentNode))
+    {
+        return false;
+    }
+
     bool bResult = false;
     int Count = 0;
 
-    Conditions.Find(CurrentNode)->Context->BreakpointExecuteCount += 1;
     for (FBlueprintDebugExtensionConditionData Condition : ConditionsForBreakpoint)
     {
         if (Count == 0)

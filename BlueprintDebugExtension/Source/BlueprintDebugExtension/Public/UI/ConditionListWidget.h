@@ -43,6 +43,8 @@ public:
 	void Construct(const FArguments& InArgs);
 	TArray<FBlueprintDebugExtensionConditionData> GetEditedConditions() const;
 
+	virtual ~SConditionListWidget();
+
 private:
 	void RebuildConditionsList();
 	void AddNewConditionOfClass(UClass* ChosenClass);
@@ -53,5 +55,6 @@ private:
 	UBlueprint* Blueprint;
 	const UEdGraphNode* Node;
 	TArray<FBlueprintDebugExtensionConditionData> EditingConditions;
+	TArray<TStrongObjectPtr<UBlueprintDebugExtensionCondition>> CopyConditions;
 	TSharedPtr<SVerticalBox> ConditionsContainer;
 };

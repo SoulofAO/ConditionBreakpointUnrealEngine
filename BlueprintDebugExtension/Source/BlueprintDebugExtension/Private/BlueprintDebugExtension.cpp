@@ -4,25 +4,17 @@
  * Copyright AO All Rights Reserved.
  */
 
-
-
-
 #include "BlueprintDebugExtension.h"
-
-#define private public
-#include "Kismet2/Breakpoint.h"
 #include "Blueprint/BlueprintExceptionInfo.h"
-#undef private
-
 #include "Kismet2/DebuggerCommands.h"
 #include "GraphEditorModule.h"
 #include "BlueprintDebugExtentionsGraphCommands.h"
 #include "Kismet2/KismetDebugUtilities.h"
 #include "Kismet2/BlueprintEditorUtils.h"
 #include "BlueprintDebugExtensionSubsystem.h"
+#include "Misc/DefinePrivateMemberPtr.h"
 
-
-
+UE_DEFINE_PRIVATE_MEMBER_PTR(EBlueprintExceptionType::Type, GBlueprintExceptionType, FBlueprintExceptionInfo, EventType);
 
 void FBlueprintDebugExtensionModule::StartupModule()
 {
@@ -58,7 +50,7 @@ void FBlueprintDebugExtensionModule::OnScriptException(const UObject* ActiveObje
         UBlueprintDebugExtensionSubsystem* BlueprintDebugExtensionSubsystem = GEditor->GetEditorSubsystem<UBlueprintDebugExtensionSubsystem>();
         if (!BlueprintDebugExtensionSubsystem->CheckCondition(ActiveObject, StackFrame))
         {
-            BlueprintExceptionInfo.EventType = EBlueprintExceptionType::Tracepoint;
+            BlueprintExceptionInfo.*GBlueprintExceptionType = EBlueprintExceptionType::Tracepoint;
         }
 	}
 }
