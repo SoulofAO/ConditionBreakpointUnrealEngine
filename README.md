@@ -1,54 +1,199 @@
-Install the plugin by placing BlueprintDebugExtension Folder in the Plugins folder in the project's root folder.
+<p align="center">
+  <strong>-------></strong>
+  <a href="/README.ru.md">Русский</a> |
+  <a href="/docs/README.md">English</a>
+  <strong><-------</strong>
+</p>
 
-Open Settings Here:
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./media/logo-dark.png">
+    <img width="512" height="auto" alt="Project Logo" src="./media/logo-light.png">
+  </picture>
+</p>
 
-<img width="471" height="585" alt="Снимок экрана 2025-12-11 115339" src="https://github.com/user-attachments/assets/78fb539a-40ff-40b9-bb29-0768df5d5e70" />
+---
 
-Main Control Panel:
+<div align="center">
 
-<img width="592" height="422" alt="image" src="https://github.com/user-attachments/assets/1e80ea7f-1a64-4229-ba9e-10a82221f2f6" />
+[![GitHub](https://img.shields.io/badge/GitHub-blue?style=flat&logo=github)](https://github.com/SoulofAO)
+[![License](https://img.shields.io/badge/License-purple?style=flat&logo=github)](/LICENSE.md)
+[![GitHub Stars](https://img.shields.io/github/stars/SoulofAO?style=flat&logo=github&label=Stars&color=orange)](https://github.com/SoulofAO)
 
-Add Conditions:
+</div>
 
-<img width="874" height="513" alt="image" src="https://github.com/user-attachments/assets/8ee9cae7-f103-42e8-9153-eb09ae4a466d" />
+<h1 align="center">
+Test Integrate Conditional Breakpoint In Blueprint For Unreal Engine
+</h1>
 
-Check Property Debug Condition - Condition based on Simple Checks for equality and other operators between Property and a constant or Property and another Property. There is an extension under GetName for UObject Ref.
+<h2 align="center">
+    ⚠️ Disclaimer ⚠️
+</h2>
+<p align="center">
+  The author is not responsible for any possible consequences resulting from the use of this project.
+  By using the materials in this repository, you automatically agree to the terms of the associated license agreement.
+</p>
 
-<img width="821" height="456" alt="image" src="https://github.com/user-attachments/assets/27e59a85-b318-4fda-9292-43b3d9b41fc1" />
+<details>
+  <summary align="center">⚠️ Full Text ⚠️</summary>
 
-Function Binding Debug Condition - Links the Debug Point Condition execute call a Blueprint function.
+1. By using the materials in this repository, you automatically agree to the terms of the associated license agreement.
 
-<img width="746" height="151" alt="image" src="https://github.com/user-attachments/assets/de672db2-b93f-4273-b4cc-4eb0f537f8de" />
+2. The author provides no warranties, express or implied, regarding the accuracy, completeness, or suitability of this material for any specific purpose.
+3. The author shall not be liable for any losses, including but not limited to direct, indirect, incidental, consequential, or special damages, arising from the use or inability to use this material or its accompanying documentation, even if the possibility of such damages was previously communicated.
 
-Reapet Debug Condition - Condition that allows you to set a condition based on the number of Breakpoint triggers.
+4. By using this material, you acknowledge and assume all risks associated with its application. Furthermore, you agree that the author cannot be held liable for any issues or consequences arising from its use.
 
-<img width="532" height="178" alt="image" src="https://github.com/user-attachments/assets/3d3fb67f-352a-412a-8c37-f139360caa87" />
+</details>
 
-The plugin allows you to have custom Condition. To do this, inherit Blueprint from the Base Blueprint Debug Condition Class.
-
-<img width="584" height="70" alt="image" src="https://github.com/user-attachments/assets/67df7195-a223-4c35-8901-58b30f187310" />
-
-All Condition are Boolean conditions that can be mixed with each other. For this purpose, List Condition has And and Or as the simplest Boolean expression operations.
-
-<img width="213" height="547" alt="Снимок экрана 2025-12-11 122547" src="https://github.com/user-attachments/assets/2fdce46f-fcbc-4240-97f5-378595585d94" />
-
-Additional information for a specific Breakpoint can be expanded using the Custom Extender Context. 
-In this case, you can get it for the Base Blueprint Extender Condition using Get New Global Custom Extender By Object. This allows you to create cumulative Breakpoint Conditions. 
-You can find all the examples in the Content Plugin.
+* * * * * * * * * * * * * * * * * *
+* * * * * * * * * * * * * * * * * *
 
 
-Copy right rools.
-Requirement for Derivative Works.
-Any derivative work, fork, or plugin whose primary purpose is adding, managing, evaluating, or otherwise operating conditional breakpoints in Unreal Engine Blueprints must be fully open source and distributed under terms compatible with this license.
+<h1 align="center">📊 Installation</h1>
 
-Reuse for Other Primary Purposes.
-Projects that reuse the code for a different primary purpose (i.e., when the main purpose is not related to conditional breakpoint handling in Blueprints) may be closed-source or commercial. Such usage must include clear attribution to the original project (see example below) and must preserve the LICENSE/NOTICE files in the distributed package.
+<h3 align="left">1. Select the folder where the plugin will be downloaded and copy the path to the file.</h3>
 
-Preservation of Author Files.
-You may not remove or alter the original LICENSE, NOTICE files, or any existing author headers in the source files. All author attributions and license headers must remain intact in the source code and, where reasonable, in binary distributions.
+<div align="center" >
+  <img style="width: 60%; height: auto; " alt="start_folder_cmd" src="./media/start_folder_cmd.png" />
+</div>
 
-“AS IS” and Warranty Disclaimer.
-The code is provided “AS IS”. The authors provide no warranties, express or implied, including but not limited to warranties of merchantability or fitness for a particular purpose. The authors accept no liability for any damages or losses arising from the use of this code.
+<h3 align="left">2. Delete everything in the path field, enter the command <code>cmd</code>, and press <code>Enter</code>.</h3>
+<div align="center" >
+  <img style="width: 60%; height: auto;" alt="open cmd" src="./media/open_cmd.png"/>
+</div>
 
-Right to Modify These Rules.
-The plugin author(s) reserve the right to modify these rules in future versions. Any changes become effective upon publication and do not apply retroactively to previously released versions unless explicitly stated.
+<h3 align="left">3. A command console will open. Enter the command to download the repository:</h3>
+<div>
+  <pre><code>git clone https://github.com/SoulofAO/ConditionBreakpointUnrealEngine.git</code></pre>
+</div>
+
+<h3 align="left">4. Move the plugin <code>ConditionBreakpointUnrealEngine</code> to the <code>Plugins</code> folder of your project.</h3>
+
+
+* * * * * * * * * * * * * * * * * *
+* * * * * * * * * * * * * * * * * *
+
+<h1 align="center">📊 Working with the Code</h1>
+
+<h3 align="left">1. Right-click and open <code>Open Settings:</code> in the <code>CONDITIONAL BREAKPOINTS</code> section, select the item <code>OpenBreakpointConditionSettings</code>.</h3>
+
+<div align="center" >
+  <img style="width: 60%; height: auto;" alt="Open Settings Here" src="./media/Open Settings Here.png"/>
+</div>
+
+
+<h3 align="left">2. The <code>Main Control Panel</code> will open. In the left corner, click the button to add conditions <code>Add Conditions:</code>.</h3>
+<div align="center" >
+  <img style="width: 60%; height: auto;" alt="Main Control Panel" src="./media/Main Control Panel.png"/>
+  <img style="width: 60%; height: auto;" alt="Add Conditions" src="./media/Add Conditions.png"/>
+</div>
+
+* * * * * * * * * * * * * * * * * *
+* * * * * * * * * * * * * * * * * *
+
+<h1 align="center">List of Conditions</h1>
+<div align="center" >
+  <img style="width: 60%; height: auto;" alt="Conditions" src="./media/Conditions.png"/>
+</div>
+
+---
+
+<p align="left">
+    1. <code> Check Property Debug Condition </code> – A condition based on simple checks, such as equality and other operators, between a property and a constant or between two properties. There is an extension for GetName for UObject Ref.
+</p>
+
+<div align="center" >
+  <img style="width: 60%; height: auto;" alt="Check Property Debug Condition" src="./media/Check Property Debug Condition.png"/>
+</div>
+
+---
+
+<p align="left">
+    2. <code> Function Binding Debug Condition </code> – Binds a breakpoint condition to a Blueprint function call.
+</p>
+
+<div align="center" >
+  <img style="width: 60%; height: auto;" alt="Check Property Debug Condition" src="./media/Function Binding Debug Condition.png"/>
+</div>
+
+---
+
+<p align="left">
+    3. <code> Repeat Debug Condition </code> – A condition that allows setting a check based on the number of times a breakpoint is triggered.
+</p>
+
+<div align="center" >
+  <img style="width: 60%; height: auto;" alt="Check Property Debug Condition" src="./media/Repeat Debug Condition.png"/>
+</div>
+
+---
+---
+
+<h1 align="center">📊 The plugin allows you to create <code>Custom Conditions</code>.</h1>
+
+<p align="left">
+    To do this, you need to inherit a <code>Blueprint</code> from the base class <code>Base Blueprint Debug Condition</code>.
+</p>
+
+
+<div align="center" >
+  <img style="width: 60%; height: auto;" alt="Condition" src="./media/Conditions_2.png"/>
+</div>
+
+---
+
+<p align="left">
+    All conditions are boolean and can be combined with each other. For this, the <code>List Condition</code> has <code>And</code> and <code>Or</code> operations as the simplest boolean expressions.
+</p>
+
+<div align="center" >
+  <img style="width: 213; height: auto;" alt="Custom Condition" src="./media/Custom Condition.png"/>
+</div>
+
+---
+
+<h2 align="center">
+> 💡 Additional Information:
+</h2>
+
+<p align="left">
+For a specific breakpoint, you can expand it using <code>Custom Extender Context</code>.
+In this case, it can be obtained for <code>Base Blueprint Extender Condition</code> via <code>Get New Global Custom Extender By Object</code>. This allows creating cumulative conditions for a <code>Breakpoint</code>.
+All examples can be found in the <code>Content Plugin</code>.
+</p>
+
+* * * * * * * * * * * * * * * * * *
+* * * * * * * * * * * * * * * * * *
+
+<h1 align="center"> 📜 License</h1>
+<h2 align="center">
+  <strong>-------></strong>
+  <strong> This project is distributed under the </strong>
+  <a href="./LICENSE">SoulofAO License</a>
+  <strong><-------</strong>
+</h1>
+
+---
+
+<h1 align="center">📬 Feedback</h1>
+<p align="center">
+If you encounter any issues or have suggestions — create an
+<a href="https://github.com/SoulofAO/ConditionBreakpointUnrealEngine/issues">Issue</a>
+or
+<a href="https://github.com/SoulofAO/ConditionBreakpointUnrealEngine/pulls">Pull Request</a>
+</p>
+
+
+---
+
+<h2 align="center">
+📚 Documentation, please review it
+</h2>
+
+<p align="center">
+  <strong>-------></strong>
+  <a href="/docs/README.md">English</a> |
+  <a href="/README.ru.md">Русский</a>
+  <strong><-------</strong>
+</p>
