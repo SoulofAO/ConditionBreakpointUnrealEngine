@@ -55,12 +55,12 @@ Test Integrate Conditional Breakpoint In Blueprint For Unreal Engine
 <h3 align="left">1. Select the folder where the plugin will be downloaded and copy the path to the file.</h3>
 
 <div align="center" >
-  <img style="width: 60%; height: auto; " alt="start_folder_cmd" src="./media/start_folder_cmd.png" />
+  <img style="width: 80%; height: auto; " alt="start_folder_cmd" src="./media/start_folder_cmd.png" />
 </div>
 
 <h3 align="left">2. Delete everything in the path field, enter the command <code>cmd</code>, and press <code>Enter</code>.</h3>
 <div align="center" >
-  <img style="width: 60%; height: auto;" alt="open cmd" src="./media/open_cmd.png"/>
+  <img style="width: 80%; height: auto;" alt="open cmd" src="./media/open_cmd.png"/>
 </div>
 
 <h3 align="left">3. A command console will open. Enter the command to download the repository:</h3>
@@ -79,14 +79,14 @@ Test Integrate Conditional Breakpoint In Blueprint For Unreal Engine
 <h3 align="left">1. Right-click and open <code>Open Settings:</code> in the <code>CONDITIONAL BREAKPOINTS</code> section, select the item <code>OpenBreakpointConditionSettings</code>.</h3>
 
 <div align="center" >
-  <img style="width: 60%; height: auto;" alt="Open Settings Here" src="./media/Open Settings Here.png"/>
+  <img style="width: 70; height: auto;" alt="Open Settings Here" src="./media/Open Settings Here.png"/>
 </div>
 
 
 <h3 align="left">2. The <code>Main Control Panel</code> will open. In the left corner, click the button to add conditions <code>Add Conditions:</code>.</h3>
 <div align="center" >
-  <img style="width: 60%; height: auto;" alt="Main Control Panel" src="./media/Main Control Panel.png"/>
-  <img style="width: 60%; height: auto;" alt="Add Conditions" src="./media/Add Conditions.png"/>
+  <img style="width: 70; height: auto;" alt="Main Control Panel" src="./media/Main Control Panel.png"/>
+  <img style="width: 70; height: auto;" alt="Add Conditions" src="./media/Add Conditions.png"/>
 </div>
 
 * * * * * * * * * * * * * * * * * *
@@ -94,7 +94,7 @@ Test Integrate Conditional Breakpoint In Blueprint For Unreal Engine
 
 <h1 align="center">List of Conditions</h1>
 <div align="center" >
-  <img style="width: 60%; height: auto;" alt="Conditions" src="./media/Conditions.png"/>
+  <img style="width: 70; height: auto;" alt="Conditions" src="./media/Conditions.png"/>
 </div>
 
 ---
@@ -104,7 +104,7 @@ Test Integrate Conditional Breakpoint In Blueprint For Unreal Engine
 </p>
 
 <div align="center" >
-  <img style="width: 60%; height: auto;" alt="Check Property Debug Condition" src="./media/Check Property Debug Condition.png"/>
+  <img style="width: 70; height: auto;" alt="Check Property Debug Condition" src="./media/Check Property Debug Condition.png"/>
 </div>
 
 ---
@@ -114,7 +114,7 @@ Test Integrate Conditional Breakpoint In Blueprint For Unreal Engine
 </p>
 
 <div align="center" >
-  <img style="width: 60%; height: auto;" alt="Check Property Debug Condition" src="./media/Function Binding Debug Condition.png"/>
+  <img style="width: 70; height: auto;" alt="Check Property Debug Condition" src="./media/Function Binding Debug Condition.png"/>
 </div>
 
 ---
@@ -124,7 +124,7 @@ Test Integrate Conditional Breakpoint In Blueprint For Unreal Engine
 </p>
 
 <div align="center" >
-  <img style="width: 60%; height: auto;" alt="Check Property Debug Condition" src="./media/Repeat Debug Condition.png"/>
+  <img style="width: 70; height: auto;" alt="Check Property Debug Condition" src="./media/Repeat Debug Condition.png"/>
 </div>
 
 ---
@@ -138,7 +138,7 @@ Test Integrate Conditional Breakpoint In Blueprint For Unreal Engine
 
 
 <div align="center" >
-  <img style="width: 60%; height: auto;" alt="Condition" src="./media/Conditions_2.png"/>
+  <img style="width: 70; height: auto;" alt="Condition" src="./media/Conditions_2.png"/>
 </div>
 
 ---
