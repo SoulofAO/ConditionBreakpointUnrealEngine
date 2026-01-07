@@ -24,9 +24,9 @@ bool UBaseBlueprintDebugCondition::CheckValidCondition(UBlueprint* Blueprint) co
     return CheckValidConditionBlueprint(Blueprint);
 }
 
-TSharedPtr<SWidget> UBaseBlueprintDebugCondition::InitializationWidget(UBlueprint* Blueprint)
+TSharedPtr<SWidget> UBaseBlueprintDebugCondition::InitializationWidget(UBlueprint* Blueprint, const UEdGraphNode* Node)
 {
-    UWidget* WidgetFromBlueprint = InitializationWidgetBlueprint(Blueprint);
+    UWidget* WidgetFromBlueprint = InitializationWidgetBlueprint(Blueprint, Node);
 
     if (WidgetFromBlueprint != nullptr)
     {
@@ -46,7 +46,7 @@ bool UBaseBlueprintDebugCondition::CheckValidConditionBlueprint_Implementation(U
     return true;
 }
 
-UWidget* UBaseBlueprintDebugCondition::InitializationWidgetBlueprint_Implementation(UBlueprint* Blueprint)
+UWidget* UBaseBlueprintDebugCondition::InitializationWidgetBlueprint_Implementation(UBlueprint* Blueprint, const UEdGraphNode* Node)
 {
     return nullptr;
 }

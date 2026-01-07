@@ -91,5 +91,5 @@ public:
 	FTSTicker::FDelegateHandle TickDelegateHandle;
 
 	UPROPERTY()
-	TMap<UEdGraphNode*, FArrayBlueprintDebugExtensionConditionData> Conditions;
+	TMap<FGuid, FArrayBlueprintDebugExtensionConditionData> Conditions;
 };

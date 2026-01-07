@@ -28,7 +28,7 @@ public:
 
     virtual bool CheckValidCondition(UBlueprint* Blueprint) const override;
 
-    virtual TSharedPtr<SWidget> InitializationWidget(UBlueprint* Blueprint) override;
+    virtual TSharedPtr<SWidget> InitializationWidget(UBlueprint* Blueprint, const UEdGraphNode* Node) override;
 
 protected:
     UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "BlueprintDebug|Condition")
@@ -40,8 +40,8 @@ protected:
 	virtual bool CheckValidConditionBlueprint_Implementation(UBlueprint* Blueprint) const;
 
     UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "BlueprintDebug|Condition")
-    UWidget* InitializationWidgetBlueprint(UBlueprint* Blueprint);
-	virtual UWidget* InitializationWidgetBlueprint_Implementation(UBlueprint* Blueprint);
+    UWidget* InitializationWidgetBlueprint(UBlueprint* Blueprint, const UEdGraphNode* Node);
+	virtual UWidget* InitializationWidgetBlueprint_Implementation(UBlueprint* Blueprint, const UEdGraphNode* Node);
 
 private:
     TSharedRef<SWidget> CreateBlueprintDetailPanel(UBlueprint* Blueprint);

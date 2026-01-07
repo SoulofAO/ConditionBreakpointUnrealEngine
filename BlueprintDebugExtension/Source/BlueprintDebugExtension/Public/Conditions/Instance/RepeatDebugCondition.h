@@ -37,7 +37,7 @@ public:
 
 	virtual bool CheckValidCondition(UBlueprint* Blueprint) const override;
 
-	virtual TSharedPtr<SWidget> InitializationWidget(UBlueprint* Blueprint) override;
+	virtual TSharedPtr<SWidget> InitializationWidget(UBlueprint* Blueprint, const UEdGraphNode* Node) override;
 
 	UPROPERTY(SaveGame)
 	ERepeatComparisonType ComparisonType = ERepeatComparisonType::Equal;

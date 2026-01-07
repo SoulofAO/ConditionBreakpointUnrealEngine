@@ -33,11 +33,12 @@ void SConditionListWidget::Construct(const FArguments& InArgs)
 	{
 		UBlueprintDebugExtensionSubsystem* Subsystem = GEditor->GetEditorSubsystem<UBlueprintDebugExtensionSubsystem>();
 
-		if (Subsystem != nullptr)
+		if (Subsystem != nullptr && Node != nullptr)
 		{
-			if (Subsystem->Conditions.Contains(Node))
+			FGuid NodeGuid = Node->NodeGuid;
+			if (Subsystem->Conditions.Contains(NodeGuid))
 			{
-				TArray<FBlueprintDebugExtensionConditionData> Found = Subsystem->Conditions.Find(Node)->Conditions;
+				TArray<FBlueprintDebugExtensionConditionData> Found = Subsystem->Conditions.Find(NodeGuid)->Conditions;
 				if (!Found.IsEmpty())
 				{
 					for (const FBlueprintDebugExtensionConditionData& Source : Found)
@@ -154,7 +155,7 @@ void SConditionListWidget::RebuildConditionsList()
 		TSharedPtr<SWidget> ConfigWidget = SNullWidget::NullWidget;
 		if (Entry.Condition != nullptr)
 		{
-			ConfigWidget = Entry.Condition->InitializationWidget(Blueprint);
+			ConfigWidget = Entry.Condition->InitializationWidget(Blueprint, Node);
 			if (!ConfigWidget.IsValid())
 			{
 				ConfigWidget = SNew(STextBlock).Text(FText::FromString(TEXT("No configuration widget")));

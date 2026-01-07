@@ -15,6 +15,7 @@
 
 
 class UExecBlueprintBreakpointContext;
+class UEdGraphNode;
 
 UCLASS(Abstract)
 class BLUEPRINTDEBUGEXTENSION_API UBlueprintDebugExtensionCondition : public UObject
@@ -22,10 +23,9 @@ class BLUEPRINTDEBUGEXTENSION_API UBlueprintDebugExtensionCondition : public UOb
 	GENERATED_BODY()
 public:
 
-	//Return true, if breakpoint should trigger
 	virtual bool CheckCondition(const UObject* ActiveObject, const FFrame& StackFrame, UExecBlueprintBreakpointContext* ExecBlueprintPointContext);
 
 	virtual bool CheckValidCondition(UBlueprint* Blueprint) const;
 
-	virtual class TSharedPtr<SWidget> InitializationWidget(UBlueprint* Blueprint);
+	virtual class TSharedPtr<SWidget> InitializationWidget(UBlueprint* Blueprint, const UEdGraphNode* Node);
 };

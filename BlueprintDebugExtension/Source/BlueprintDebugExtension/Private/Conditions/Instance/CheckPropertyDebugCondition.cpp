@@ -12,7 +12,6 @@
 #include "Widgets/Input/SEditableTextBox.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Layout/SBox.h"
-#include "Widgets/Layout/SScrollBox.h"
 #include "Widgets/SNullWidget.h"
 #include "UObject/UnrealType.h"
 #include "UObject/PropertyPortFlags.h"
@@ -22,92 +21,86 @@
 #include "Engine/Blueprint.h"
 #include "Engine/BlueprintGeneratedClass.h"
 #include "ExecBlueprintBreakpointContext.h"
+#include "Math/UnrealMathUtility.h"
+#include "EdGraph/EdGraphNode.h"
+#include "EdGraph/EdGraphPin.h"
+#include "Kismet2/BlueprintEditorUtils.h"
+#include "BlueprintEditorLibrary.h"
 
 #define LOCTEXT_NAMESPACE "FBlueprintDebugExtensionModule"
 
 bool UCheckPropertyDebugCondition::CheckCondition(const UObject* ActiveObject, const FFrame& StackFrame, UExecBlueprintBreakpointContext* ExecBlueprintPointContext)
 {
-	if (!IsValid(ActiveObject) || Comparisons.Num() == 0)
+	if (!IsValid(ActiveObject))
 	{
 		return false;
 	}
 
-	bool bResult = false;
-	bool bFirstComparison = true;
+	UEdGraphNode* CurrentNode = GetCurrentNodeFromStackFrame(ActiveObject, StackFrame);
 
-	for (int32 i = 0; i < Comparisons.Num(); ++i)
+	FString LeftValue;
+	if (LeftOperandType == EPropertyOperandType::Property)
 	{
-		const FPropertyComparison& Comparison = Comparisons[i];
-
-		// Get left operand value
-		FString LeftValue;
-		if (!GetPropertyValue(ActiveObject, Comparison.LeftPropertyName, Comparison.bUseObjectNameForLeftProperty, LeftValue))
+		if (LeftPropertyName.IsEmpty() || !GetPropertyValue(ActiveObject, LeftPropertyName, bUseObjectNameForLeftProperty, LeftValue))
 		{
-			// If property not found, skip this comparison
-			continue;
-		}
-
-		// Get right operand value
-		FString RightValue;
-		if (Comparison.RightOperandType == EPropertyOperandType::Property)
-		{
-			if (!GetPropertyValue(ActiveObject, Comparison.RightPropertyName, Comparison.bUseObjectNameForRightProperty, RightValue))
-			{
-				// If property not found, skip this comparison
-				continue;
-			}
-		}
-		else
-		{
-			RightValue = Comparison.ConstantValue;
-		}
-
-		// Perform comparison
-		bool bComparisonResult = CompareValues(LeftValue, RightValue, Comparison.Operator);
-
-		// Combine with previous result
-		if (bFirstComparison)
-		{
-			bResult = bComparisonResult;
-			bFirstComparison = false;
-		}
-		else
-		{
-			// Use logical operator from previous comparison
-			EPropertyLogicalOperator LogicalOp = (i > 0) ? Comparisons[i - 1].LogicalOperator : EPropertyLogicalOperator::And;
-			if (LogicalOp == EPropertyLogicalOperator::And)
-			{
-				bResult = bResult && bComparisonResult;
-			}
-			else
-			{
-				bResult = bResult || bComparisonResult;
-			}
+			return false;
 		}
 	}
+	else if (LeftOperandType == EPropertyOperandType::InputPin)
+	{
+		if (CurrentNode == nullptr || LeftInputPinName.IsEmpty() || !GetInputPinValue(CurrentNode, LeftInputPinName, LeftValue))
+		{
+			return false;
+		}
+	}
+	else
+	{
+		return false;
+	}
 
-	return bResult;
+	FString RightValue;
+	if (RightOperandType == EPropertyOperandType::Property)
+	{
+		if (RightPropertyName.IsEmpty() || !GetPropertyValue(ActiveObject, RightPropertyName, bUseObjectNameForRightProperty, RightValue))
+		{
+			return false;
+		}
+	}
+	else if (RightOperandType == EPropertyOperandType::InputPin)
+	{
+		if (CurrentNode == nullptr || RightInputPinName.IsEmpty() || !GetInputPinValue(CurrentNode, RightInputPinName, RightValue))
+		{
+			return false;
+		}
+	}
+	else
+	{
+		RightValue = ConstantValue;
+	}
+
+	return CompareValues(LeftValue, RightValue);
 }
 
 bool UCheckPropertyDebugCondition::CheckValidCondition(UBlueprint* Blueprint) const
 {
-	if (Comparisons.Num() == 0)
+	if (LeftOperandType == EPropertyOperandType::Property && LeftPropertyName.IsEmpty())
 	{
 		return false;
 	}
 
-	// Check that all comparisons have valid property names
-	for (const FPropertyComparison& Comparison : Comparisons)
+	if (LeftOperandType == EPropertyOperandType::InputPin && LeftInputPinName.IsEmpty())
 	{
-		if (Comparison.LeftPropertyName.IsEmpty())
-		{
-			return false;
-		}
+		return false;
+	}
 
-		if (Comparison.RightOperandType == EPropertyOperandType::Property && Comparison.RightPropertyName.IsEmpty())
-		{
-			return false;
-		}
+	if (RightOperandType == EPropertyOperandType::Property && RightPropertyName.IsEmpty())
+	{
+		return false;
+	}
+
+	if (RightOperandType == EPropertyOperandType::InputPin && RightInputPinName.IsEmpty())
+	{
+		return false;
 	}
 
 	return true;
@@ -128,7 +121,6 @@ bool UCheckPropertyDebugCondition::GetPropertyValue(const UObject* Object, const
 		return false;
 	}
 
-	// If requested and property is object, use object name for comparison
 	if (bPreferObjectName)
 	{
 		if (const FObjectProperty* ObjectProperty = CastField<FObjectProperty>(Property))
@@ -141,15 +133,117 @@ bool UCheckPropertyDebugCondition::GetPropertyValue(const UObject* Object, const
 		}
 	}
 
-	// Export property value to string
 	const void* ValuePtr = Property->ContainerPtrToValuePtr<void>(Object);
 	Property->ExportText_Direct(OutValue, ValuePtr, "-1", const_cast<UObject*>(Object), PPF_None);
 
 	return true;
 }
 
-bool UCheckPropertyDebugCondition::CompareValues(const FString& LeftValue, const FString& RightValue, EPropertyComparisonOperator Operator) const
+UEdGraphNode* UCheckPropertyDebugCondition::GetCurrentNodeFromStackFrame(const UObject* ActiveObject, const FFrame& StackFrame) const
 {
+	if (!IsValid(ActiveObject))
+	{
+		return nullptr;
+	}
+
+	UFunction* Function = StackFrame.Node;
+	if (Function == nullptr)
+	{
+		return nullptr;
+	}
+
+	int32 CodeOffset = StackFrame.Code - StackFrame.Node->Script.GetData();
+	UBlueprintGeneratedClass* BGClass = Cast<UBlueprintGeneratedClass>(ActiveObject->GetClass());
+	if (BGClass == nullptr)
+	{
+		return nullptr;
+	}
+
+	return BGClass->DebugData.FindSourceNodeFromCodeLocation(Function, CodeOffset, true);
+}
+
+bool UCheckPropertyDebugCondition::GetInputPinValue(const UEdGraphNode* Node, const FString& PinName, FString& OutValue) const
+{
+	if (Node == nullptr || PinName.IsEmpty())
+	{
+		return false;
+	}
+
+	for (UEdGraphPin* Pin : Node->Pins)
+	{
+		if (Pin != nullptr && Pin->Direction == EGPD_Input && Pin->PinName.ToString() == PinName)
+		{
+			if (Pin->LinkedTo.Num() > 0)
+			{
+				return false;
+			}
+
+			if (!Pin->DefaultValue.IsEmpty())
+			{
+				OutValue = Pin->DefaultValue;
+				return true;
+			}
+
+			if (Pin->DefaultObject != nullptr)
+			{
+				OutValue = Pin->DefaultObject->GetName();
+				return true;
+			}
+
+			if (!Pin->DefaultTextValue.IsEmpty())
+			{
+				OutValue = Pin->DefaultTextValue.ToString();
+				return true;
+			}
+
+			if (Pin->PinType.PinCategory == TEXT("bool"))
+			{
+				OutValue = TEXT("False");
+				return true;
+			}
+
+			OutValue = TEXT("");
+			return true;
+		}
+	}
+
+	return false;
+}
+
+bool UCheckPropertyDebugCondition::CompareValues(const FString& LeftValue, const FString& RightValue) const
+{
+	double LeftNum = 0.0;
+	double RightNum = 0.0;
+	bool bLeftIsNumeric = LexTryParseString(LeftNum, *LeftValue);
+	bool bRightIsNumeric = LexTryParseString(RightNum, *RightValue);
+
+	if (bLeftIsNumeric && bRightIsNumeric)
+	{
+		switch (Operator)
+		{
+		case EPropertyComparisonOperator::Equal:
+			return FMath::IsNearlyEqual(LeftNum, RightNum, KINDA_SMALL_NUMBER);
+
+		case EPropertyComparisonOperator::NotEqual:
+			return !FMath::IsNearlyEqual(LeftNum, RightNum, KINDA_SMALL_NUMBER);
+
+		case EPropertyComparisonOperator::Less:
+			return LeftNum < RightNum;
+
+		case EPropertyComparisonOperator::LessOrEqual:
+			return LeftNum <= RightNum;
+
+		case EPropertyComparisonOperator::Greater:
+			return LeftNum > RightNum;
+
+		case EPropertyComparisonOperator::GreaterOrEqual:
+			return LeftNum >= RightNum;
+
+		default:
+			return false;
+		}
+	}
+
 	switch (Operator)
 	{
 	case EPropertyComparisonOperator::Equal:
@@ -159,52 +253,16 @@ bool UCheckPropertyDebugCondition::CompareValues(const FString& LeftValue, const
 		return LeftValue != RightValue;
 
 	case EPropertyComparisonOperator::Less:
-	{
-		// Try numeric comparison
-		double LeftNum, RightNum;
-		if (LexTryParseString(LeftNum, *LeftValue) && LexTryParseString(RightNum, *RightValue))
-		{
-			return LeftNum < RightNum;
-		}
-		// Fallback to string comparison
 		return LeftValue < RightValue;
-	}
 
 	case EPropertyComparisonOperator::LessOrEqual:
-	{
-		// Try numeric comparison
-		double LeftNum, RightNum;
-		if (LexTryParseString(LeftNum, *LeftValue) && LexTryParseString(RightNum, *RightValue))
-		{
-			return LeftNum <= RightNum;
-		}
-		// Fallback to string comparison
 		return LeftValue <= RightValue;
-	}
 
 	case EPropertyComparisonOperator::Greater:
-	{
-		// Try numeric comparison
-		double LeftNum, RightNum;
-		if (LexTryParseString(LeftNum, *LeftValue) && LexTryParseString(RightNum, *RightValue))
-		{
-			return LeftNum > RightNum;
-		}
-		// Fallback to string comparison
 		return LeftValue > RightValue;
-	}
 
 	case EPropertyComparisonOperator::GreaterOrEqual:
-	{
-		// Try numeric comparison
-		double LeftNum, RightNum;
-		if (LexTryParseString(LeftNum, *LeftValue) && LexTryParseString(RightNum, *RightValue))
-		{
-			return LeftNum >= RightNum;
-		}
-		// Fallback to string comparison
 		return LeftValue >= RightValue;
-	}
 
 	default:
 		return false;
@@ -226,30 +284,50 @@ void UCheckPropertyDebugCondition::GetAvailableProperties(const UObject* Object,
 		FProperty* Property = *PropIt;
 		if (Property != nullptr)
 		{
-			// Skip transient and deprecated properties
 			if (Property->HasAnyPropertyFlags(CPF_Transient | CPF_Deprecated))
 			{
 				continue;
 			}
-
-			// Skip functions (functions are not properties)
-			// Properties are already filtered by TFieldIterator<FProperty>
 
 			OutPropertyNames.Add(Property->GetName());
 		}
 	}
 }
 
-TSharedPtr<SWidget> UCheckPropertyDebugCondition::InitializationWidget(UBlueprint* Blueprint)
+void UCheckPropertyDebugCondition::GetAvailableInputPins(const UEdGraphNode* Node, TArray<FString>& OutPinNames) const
+{
+	OutPinNames.Empty();
+
+	if (Node == nullptr)
+	{
+		return;
+	}
+
+	for (UEdGraphPin* Pin : Node->Pins)
+	{
+		if (Pin != nullptr && Pin->Direction == EGPD_Input && !Pin->PinName.IsNone())
+		{
+			FString PinNameStr = Pin->PinName.ToString();
+			if (!PinNameStr.IsEmpty())
+			{
+				OutPinNames.Add(PinNameStr);
+			}
+		}
+	}
+}
+
+TSharedPtr<SWidget> UCheckPropertyDebugCondition::InitializationWidget(UBlueprint* Blueprint, const UEdGraphNode* Node)
 {
 	return SNew(SCheckPropertyInitializationWidget)
 		.Blueprint(Blueprint)
+		.Node(Node)
 		.Condition(this);
 }
 
 void SCheckPropertyInitializationWidget::Construct(const FArguments& InArgs)
 {
 	Blueprint = InArgs._Blueprint;
+	CurrentNode = const_cast<UEdGraphNode*>(InArgs._Node);
 	Condition = InArgs._Condition;
 
 	if (Condition == nullptr || Blueprint == nullptr || Blueprint->GeneratedClass == nullptr)
@@ -262,6 +340,7 @@ void SCheckPropertyInitializationWidget::Construct(const FArguments& InArgs)
 	}
 
 	BuildPropertyOptions(Blueprint);
+	BuildInputPinOptions(CurrentNode);
 
 	OperatorOptions = MakeShared<TArray<TSharedPtr<FString>>>();
 	OperatorOptions->Add(MakeShared<FString>(TEXT("==")));
@@ -273,22 +352,495 @@ void SCheckPropertyInitializationWidget::Construct(const FArguments& InArgs)
 
 	OperandTypeOptions = MakeShared<TArray<TSharedPtr<FString>>>();
 	OperandTypeOptions->Add(MakeShared<FString>(TEXT("Property")));
+	OperandTypeOptions->Add(MakeShared<FString>(TEXT("InputPin")));
 	OperandTypeOptions->Add(MakeShared<FString>(TEXT("Constant")));
 
-	// Ensure we have at least one comparison
-	if (Condition->Comparisons.Num() == 0)
+	LeftOperandTypeOptions = MakeShared<TArray<TSharedPtr<FString>>>();
+	LeftOperandTypeOptions->Add(MakeShared<FString>(TEXT("Property")));
+	LeftOperandTypeOptions->Add(MakeShared<FString>(TEXT("InputPin")));
+
+	if (!InputPinOptions.IsValid())
 	{
-		Condition->Comparisons.Add(FPropertyComparison());
+		InputPinOptions = MakeShared<TArray<TSharedPtr<FString>>>();
+		InputPinOptions->Add(MakeShared<FString>(FString()));
 	}
 
-	SAssignNew(ScrollBox, SScrollBox);
-
 	ChildSlot
-	[
-		ScrollBox.ToSharedRef()
-	];
 
-	RebuildContent();
+	[
+		RebuildContent()
+	];
+}
+
+TSharedRef<SWidget> SCheckPropertyInitializationWidget::RebuildContent()
+{
+	if (Condition == nullptr)
+	{
+		return SNullWidget::NullWidget;
+	}
+
+	auto FindInitialSelection = [](const TSharedPtr<TArray<TSharedPtr<FString>>>& Options, const FString& Value) -> TSharedPtr<FString>
+	{
+		if (!Options.IsValid() || Options->Num() == 0)
+		{
+			return nullptr;
+		}
+		for (const TSharedPtr<FString>& Option : *Options)
+		{
+			if (Option.IsValid() && *Option == Value)
+			{
+				return Option;
+			}
+		}
+		return (*Options)[0];
+	};
+
+	FString LeftOperandTypeStr;
+	switch (Condition->LeftOperandType)
+	{
+	case EPropertyOperandType::Property: LeftOperandTypeStr = TEXT("Property"); break;
+	case EPropertyOperandType::InputPin: LeftOperandTypeStr = TEXT("InputPin"); break;
+	default: 
+		LeftOperandTypeStr = TEXT("Property");
+		Condition->LeftOperandType = EPropertyOperandType::Property;
+		break;
+	}
+	const TSharedPtr<FString> InitialLeftOperandType = FindInitialSelection(LeftOperandTypeOptions, LeftOperandTypeStr);
+
+	const TSharedPtr<FString> InitialLeftProp = FindInitialSelection(PropertyOptions, Condition->LeftPropertyName);
+	const TSharedPtr<FString> InitialLeftInputPin = FindInitialSelection(InputPinOptions, Condition->LeftInputPinName);
+
+	FString OperatorStr;
+	switch (Condition->Operator)
+	{
+	case EPropertyComparisonOperator::Equal: OperatorStr = TEXT("=="); break;
+	case EPropertyComparisonOperator::NotEqual: OperatorStr = TEXT("!="); break;
+	case EPropertyComparisonOperator::Less: OperatorStr = TEXT("<"); break;
+	case EPropertyComparisonOperator::LessOrEqual: OperatorStr = TEXT("<="); break;
+	case EPropertyComparisonOperator::Greater: OperatorStr = TEXT(">"); break;
+	case EPropertyComparisonOperator::GreaterOrEqual: OperatorStr = TEXT(">="); break;
+	}
+	const TSharedPtr<FString> InitialOperator = FindInitialSelection(OperatorOptions, OperatorStr);
+
+	FString RightOperandTypeStr;
+	switch (Condition->RightOperandType)
+	{
+	case EPropertyOperandType::Property: RightOperandTypeStr = TEXT("Property"); break;
+	case EPropertyOperandType::InputPin: RightOperandTypeStr = TEXT("InputPin"); break;
+	case EPropertyOperandType::Constant: RightOperandTypeStr = TEXT("Constant"); break;
+	default: RightOperandTypeStr = TEXT("Constant"); break;
+	}
+	const TSharedPtr<FString> InitialRightOperandType = FindInitialSelection(OperandTypeOptions, RightOperandTypeStr);
+
+	TSharedPtr<FString> InitialRightProp = FindInitialSelection(PropertyOptions, Condition->RightPropertyName);
+	TSharedPtr<FString> InitialRightInputPin = FindInitialSelection(InputPinOptions, Condition->RightInputPinName);
+
+	return SNew(SVerticalBox)
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(6.0f)
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot()
+			.FillWidth(0.4f)
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot()
+				.FillWidth(0.3f)
+				[
+					SNew(SComboBox<TSharedPtr<FString>>)
+					.OptionsSource(LeftOperandTypeOptions.Get())
+					.OnGenerateWidget_Lambda([](TSharedPtr<FString> InItem)
+						{
+							return SNew(STextBlock).Text(FText::FromString(InItem.IsValid() ? *InItem : FString("Property")));
+						})
+					.OnSelectionChanged_Lambda([this](TSharedPtr<FString> NewSelection, ESelectInfo::Type SelectInfo)
+						{
+							if (SelectInfo != ESelectInfo::Direct && NewSelection.IsValid() && Condition != nullptr)
+							{
+								if (*NewSelection == TEXT("Property"))
+								{
+									Condition->LeftOperandType = EPropertyOperandType::Property;
+								}
+								else if (*NewSelection == TEXT("InputPin"))
+								{
+									Condition->LeftOperandType = EPropertyOperandType::InputPin;
+								}
+								Invalidate(EInvalidateWidget::Layout);
+							}
+						})
+					.InitiallySelectedItem(InitialLeftOperandType)
+					[
+						SNew(STextBlock)
+						.Text_Lambda([this]()
+							{
+								if (Condition != nullptr)
+								{
+									switch (Condition->LeftOperandType)
+									{
+									case EPropertyOperandType::Property: return FText::FromString(TEXT("Property"));
+									case EPropertyOperandType::InputPin: return FText::FromString(TEXT("InputPin"));
+									default: return FText::FromString(TEXT("Property"));
+									}
+								}
+								return FText::FromString(TEXT("Property"));
+							})
+					]
+				]
+				+ SHorizontalBox::Slot()
+				.FillWidth(0.7f)
+				.Padding(4, 0, 0, 0)
+				[
+					SNew(SBox)
+					[
+						SNew(SVerticalBox)
+						+ SVerticalBox::Slot()
+						.AutoHeight()
+						[
+							SNew(SComboBox<TSharedPtr<FString>>)
+							.Visibility_Lambda([this]()
+								{
+									return (Condition != nullptr && Condition->LeftOperandType == EPropertyOperandType::Property) ? EVisibility::Visible : EVisibility::Collapsed;
+								})
+							.OptionsSource(PropertyOptions.Get())
+							.OnGenerateWidget_Lambda([](TSharedPtr<FString> InItem)
+								{
+									return SNew(STextBlock).Text(FText::FromString(InItem.IsValid() ? *InItem : FString("None")));
+								})
+							.OnSelectionChanged_Lambda([this](TSharedPtr<FString> NewSelection, ESelectInfo::Type SelectInfo)
+								{
+									if (SelectInfo != ESelectInfo::Direct && NewSelection.IsValid() && Condition != nullptr)
+									{
+										Condition->LeftPropertyName = *NewSelection;
+										if (!IsObjectProperty(*NewSelection))
+										{
+											Condition->bUseObjectNameForLeftProperty = false;
+										}
+										Invalidate(EInvalidateWidget::Layout);
+									}
+								})
+							.InitiallySelectedItem(InitialLeftProp)
+							[
+								SNew(STextBlock)
+								.Text_Lambda([this]()
+									{
+										return FText::FromString(Condition != nullptr && !Condition->LeftPropertyName.IsEmpty() ? Condition->LeftPropertyName : TEXT("(Select Property)"));
+									})
+							]
+						]
+						+ SVerticalBox::Slot()
+						.AutoHeight()
+						.Padding(0.f, 4.f, 0.f, 0.f)
+						[
+							SNew(SCheckBox)
+							.Visibility_Lambda([this]()
+								{
+									return (Condition != nullptr && Condition->LeftOperandType == EPropertyOperandType::Property && IsObjectProperty(Condition->LeftPropertyName)) ? EVisibility::Visible : EVisibility::Collapsed;
+								})
+							.IsChecked_Lambda([this]()
+								{
+									return (Condition != nullptr && Condition->bUseObjectNameForLeftProperty) ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
+								})
+							.OnCheckStateChanged_Lambda([this](ECheckBoxState NewState)
+								{
+									if (Condition != nullptr)
+									{
+										Condition->bUseObjectNameForLeftProperty = (NewState == ECheckBoxState::Checked);
+									}
+								})
+							[
+								SNew(STextBlock)
+								.Text(LOCTEXT("CompareLeftByName", "Compare by object name"))
+							]
+						]
+						+ SVerticalBox::Slot()
+						.AutoHeight()
+						[
+							SNew(SComboBox<TSharedPtr<FString>>)
+							.Visibility_Lambda([this]()
+								{
+									return (Condition != nullptr && Condition->LeftOperandType == EPropertyOperandType::InputPin) ? EVisibility::Visible : EVisibility::Collapsed;
+								})
+							.OptionsSource(InputPinOptions.Get())
+							.OnGenerateWidget_Lambda([](TSharedPtr<FString> InItem)
+								{
+									return SNew(STextBlock).Text(FText::FromString(InItem.IsValid() ? *InItem : FString("None")));
+								})
+							.OnSelectionChanged_Lambda([this](TSharedPtr<FString> NewSelection, ESelectInfo::Type SelectInfo)
+								{
+									if (SelectInfo != ESelectInfo::Direct && NewSelection.IsValid() && Condition != nullptr)
+									{
+										Condition->LeftInputPinName = *NewSelection;
+										Invalidate(EInvalidateWidget::Layout);
+									}
+								})
+							.InitiallySelectedItem(InitialLeftInputPin)
+							[
+								SNew(STextBlock)
+								.Text_Lambda([this]()
+									{
+										return FText::FromString(Condition != nullptr && !Condition->LeftInputPinName.IsEmpty() ? Condition->LeftInputPinName : TEXT("(Select Input Pin)"));
+									})
+							]
+						]
+					]
+				]
+			]
+			+ SHorizontalBox::Slot()
+			.FillWidth(0.2f)
+			.Padding(4, 0, 4, 0)
+			[
+				SNew(SComboBox<TSharedPtr<FString>>)
+				.OptionsSource(OperatorOptions.Get())
+				.OnGenerateWidget_Lambda([](TSharedPtr<FString> InItem)
+					{
+						return SNew(STextBlock).Text(FText::FromString(InItem.IsValid() ? *InItem : FString("==")));
+					})
+				.OnSelectionChanged_Lambda([this](TSharedPtr<FString> NewSelection, ESelectInfo::Type SelectInfo)
+					{
+						if (SelectInfo != ESelectInfo::Direct && NewSelection.IsValid() && Condition != nullptr)
+						{
+							if (*NewSelection == TEXT("=="))
+								Condition->Operator = EPropertyComparisonOperator::Equal;
+							else if (*NewSelection == TEXT("!="))
+								Condition->Operator = EPropertyComparisonOperator::NotEqual;
+							else if (*NewSelection == TEXT("<"))
+								Condition->Operator = EPropertyComparisonOperator::Less;
+							else if (*NewSelection == TEXT("<="))
+								Condition->Operator = EPropertyComparisonOperator::LessOrEqual;
+							else if (*NewSelection == TEXT(">"))
+								Condition->Operator = EPropertyComparisonOperator::Greater;
+							else if (*NewSelection == TEXT(">="))
+								Condition->Operator = EPropertyComparisonOperator::GreaterOrEqual;
+						}
+					})
+				.InitiallySelectedItem(InitialOperator)
+				[
+					SNew(STextBlock)
+					.Text_Lambda([this]()
+						{
+							if (Condition != nullptr)
+							{
+								FString OpStr;
+								switch (Condition->Operator)
+								{
+								case EPropertyComparisonOperator::Equal: OpStr = TEXT("=="); break;
+								case EPropertyComparisonOperator::NotEqual: OpStr = TEXT("!="); break;
+								case EPropertyComparisonOperator::Less: OpStr = TEXT("<"); break;
+								case EPropertyComparisonOperator::LessOrEqual: OpStr = TEXT("<="); break;
+								case EPropertyComparisonOperator::Greater: OpStr = TEXT(">"); break;
+								case EPropertyComparisonOperator::GreaterOrEqual: OpStr = TEXT(">="); break;
+								}
+								return FText::FromString(OpStr);
+							}
+							return FText::FromString(TEXT("=="));
+						})
+				]
+			]
+			+ SHorizontalBox::Slot()
+			.FillWidth(0.4f)
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot()
+				.FillWidth(0.3f)
+				[
+					SNew(SComboBox<TSharedPtr<FString>>)
+					.OptionsSource(OperandTypeOptions.Get())
+					.OnGenerateWidget_Lambda([](TSharedPtr<FString> InItem)
+						{
+							return SNew(STextBlock).Text(FText::FromString(InItem.IsValid() ? *InItem : FString("Constant")));
+						})
+					.OnSelectionChanged_Lambda([this](TSharedPtr<FString> NewSelection, ESelectInfo::Type SelectInfo)
+						{
+							if (SelectInfo != ESelectInfo::Direct && NewSelection.IsValid() && Condition != nullptr)
+							{
+								if (*NewSelection == TEXT("Property"))
+									Condition->RightOperandType = EPropertyOperandType::Property;
+								else if (*NewSelection == TEXT("InputPin"))
+									Condition->RightOperandType = EPropertyOperandType::InputPin;
+								else if (*NewSelection == TEXT("Constant"))
+									Condition->RightOperandType = EPropertyOperandType::Constant;
+							}
+						})
+					.InitiallySelectedItem(InitialRightOperandType)
+					[
+						SNew(STextBlock)
+						.Text_Lambda([this]()
+							{
+								if (Condition != nullptr)
+								{
+									switch (Condition->RightOperandType)
+									{
+									case EPropertyOperandType::Property: return FText::FromString(TEXT("Property"));
+									case EPropertyOperandType::InputPin: return FText::FromString(TEXT("InputPin"));
+									case EPropertyOperandType::Constant: return FText::FromString(TEXT("Constant"));
+									default: return FText::FromString(TEXT("Constant"));
+									}
+								}
+								return FText::FromString(TEXT("Constant"));
+							})
+					]
+				]
+				+ SHorizontalBox::Slot()
+				.FillWidth(0.7f)
+				.Padding(4, 0, 0, 0)
+				[
+					SNew(SBox)
+					[
+						SNew(SVerticalBox)
+						+ SVerticalBox::Slot()
+						.AutoHeight()
+						[
+							SNew(SComboBox<TSharedPtr<FString>>)
+							.Visibility_Lambda([this]()
+								{
+									return (Condition != nullptr && Condition->RightOperandType == EPropertyOperandType::Property) ? EVisibility::Visible : EVisibility::Collapsed;
+								})
+							.OptionsSource(PropertyOptions.Get())
+							.OnGenerateWidget_Lambda([](TSharedPtr<FString> InItem)
+								{
+									return SNew(STextBlock).Text(FText::FromString(InItem.IsValid() ? *InItem : FString("None")));
+								})
+							.OnSelectionChanged_Lambda([this](TSharedPtr<FString> NewSelection, ESelectInfo::Type SelectInfo)
+								{
+									if (SelectInfo != ESelectInfo::Direct && NewSelection.IsValid() && Condition != nullptr)
+									{
+										Condition->RightPropertyName = *NewSelection;
+										if (!IsObjectProperty(*NewSelection))
+										{
+											Condition->bUseObjectNameForRightProperty = false;
+										}
+									}
+								})
+							.InitiallySelectedItem(InitialRightProp)
+							[
+								SNew(STextBlock)
+								.Text_Lambda([this]()
+									{
+										return FText::FromString(Condition != nullptr && !Condition->RightPropertyName.IsEmpty() ? Condition->RightPropertyName : TEXT("(Select Property)"));
+									})
+							]
+						]
+						+ SVerticalBox::Slot()
+						.AutoHeight()
+						.Padding(0.f, 4.f, 0.f, 0.f)
+						[
+							SNew(SCheckBox)
+							.Visibility_Lambda([this]()
+								{
+									return (Condition != nullptr
+										&& Condition->RightOperandType == EPropertyOperandType::Property
+										&& IsObjectProperty(Condition->RightPropertyName))
+										? EVisibility::Visible
+										: EVisibility::Collapsed;
+								})
+							.IsChecked_Lambda([this]()
+								{
+									return (Condition != nullptr && Condition->bUseObjectNameForRightProperty)
+										? ECheckBoxState::Checked
+										: ECheckBoxState::Unchecked;
+								})
+							.OnCheckStateChanged_Lambda([this](ECheckBoxState NewState)
+								{
+									if (Condition != nullptr)
+									{
+										Condition->bUseObjectNameForRightProperty = (NewState == ECheckBoxState::Checked);
+									}
+								})
+							[
+								SNew(STextBlock)
+								.Text(LOCTEXT("CompareRightByName", "Compare by object name"))
+							]
+						]
+						+ SVerticalBox::Slot()
+						.AutoHeight()
+						[
+							SNew(SComboBox<TSharedPtr<FString>>)
+							.Visibility_Lambda([this]()
+								{
+									return (Condition != nullptr && Condition->RightOperandType == EPropertyOperandType::InputPin) ? EVisibility::Visible : EVisibility::Collapsed;
+								})
+							.OptionsSource(InputPinOptions.Get())
+							.OnGenerateWidget_Lambda([](TSharedPtr<FString> InItem)
+								{
+									return SNew(STextBlock).Text(FText::FromString(InItem.IsValid() ? *InItem : FString("None")));
+								})
+							.OnSelectionChanged_Lambda([this](TSharedPtr<FString> NewSelection, ESelectInfo::Type SelectInfo)
+								{
+									if (SelectInfo != ESelectInfo::Direct && NewSelection.IsValid() && Condition != nullptr)
+									{
+										Condition->RightInputPinName = *NewSelection;
+									}
+								})
+							.InitiallySelectedItem(InitialRightInputPin)
+							[
+								SNew(STextBlock)
+								.Text_Lambda([this]()
+									{
+										return FText::FromString(Condition != nullptr && !Condition->RightInputPinName.IsEmpty() ? Condition->RightInputPinName : TEXT("(Select Input Pin)"));
+									})
+							]
+						]
+						+ SVerticalBox::Slot()
+						.AutoHeight()
+						[
+							SNew(SCheckBox)
+							.Visibility_Lambda([this]()
+								{
+									return (Condition != nullptr 
+										&& Condition->RightOperandType == EPropertyOperandType::Constant 
+										&& IsLeftOperandBool()) 
+										? EVisibility::Visible 
+										: EVisibility::Collapsed;
+								})
+							.IsChecked_Lambda([this]()
+								{
+									if (Condition != nullptr)
+									{
+										FString Value = Condition->ConstantValue;
+										return (Value == TEXT("True") || Value == TEXT("true") || Value == TEXT("1")) 
+											? ECheckBoxState::Checked 
+											: ECheckBoxState::Unchecked;
+									}
+									return ECheckBoxState::Unchecked;
+								})
+							.OnCheckStateChanged_Lambda([this](ECheckBoxState NewState)
+								{
+									if (Condition != nullptr)
+									{
+										Condition->ConstantValue = (NewState == ECheckBoxState::Checked) ? TEXT("True") : TEXT("False");
+									}
+								})
+						]
+						+ SVerticalBox::Slot()
+						.AutoHeight()
+						[
+							SNew(SEditableTextBox)
+							.Visibility_Lambda([this]()
+								{
+									return (Condition != nullptr 
+										&& Condition->RightOperandType == EPropertyOperandType::Constant 
+										&& !IsLeftOperandBool()) 
+										? EVisibility::Visible 
+										: EVisibility::Collapsed;
+								})
+							.Text_Lambda([this]()
+								{
+									return FText::FromString(Condition != nullptr ? Condition->ConstantValue : FString());
+								})
+							.OnTextChanged_Lambda([this](const FText& NewText)
+								{
+									if (Condition != nullptr)
+									{
+										Condition->ConstantValue = NewText.ToString();
+									}
+								})
+							.HintText(LOCTEXT("ConstantValueHint", "Enter constant value"))
+						]
+					]
+				]
+			]
+		];
 }
 
 void SCheckPropertyInitializationWidget::BuildPropertyOptions(UBlueprint* InBlueprint)
@@ -308,7 +860,7 @@ void SCheckPropertyInitializationWidget::BuildPropertyOptions(UBlueprint* InBlue
 		Condition->GetAvailableProperties(DefaultObject, AvailableProperties);
 	}
 
-	PropertyOptions->Add(MakeShared<FString>(FString())); // Empty option
+	PropertyOptions->Add(MakeShared<FString>(FString()));
 	for (const FString& PropName : AvailableProperties)
 	{
 		PropertyOptions->Add(MakeShared<FString>(PropName));
@@ -321,335 +873,176 @@ void SCheckPropertyInitializationWidget::BuildPropertyOptions(UBlueprint* InBlue
 	}
 }
 
+void SCheckPropertyInitializationWidget::BuildInputPinOptions(const UEdGraphNode* Node)
+{
+	InputPinOptions = MakeShared<TArray<TSharedPtr<FString>>>();
+	InputPinOptions->Add(MakeShared<FString>(FString()));
+
+	if (Node != nullptr)
+	{
+		TArray<FString> PinNames;
+		if (Condition != nullptr)
+		{
+			Condition->GetAvailableInputPins(Node, PinNames);
+		}
+
+		TArray<FString> SortedPinNames = PinNames;
+		SortedPinNames.Sort();
+
+		for (const FString& PinName : SortedPinNames)
+		{
+			InputPinOptions->Add(MakeShared<FString>(PinName));
+		}
+	}
+	else if (Blueprint != nullptr)
+	{
+		TSet<FString> AllPinNames;
+
+		auto ProcessGraph = [&AllPinNames](UEdGraph* Graph)
+		{
+			if (Graph != nullptr)
+			{
+				for (UEdGraphNode* GraphNode : Graph->Nodes)
+				{
+					if (GraphNode != nullptr)
+					{
+						for (UEdGraphPin* Pin : GraphNode->Pins)
+						{
+							if (Pin != nullptr && Pin->Direction == EGPD_Input && !Pin->PinName.IsNone())
+							{
+								FString PinNameStr = Pin->PinName.ToString();
+								if (!PinNameStr.IsEmpty())
+								{
+									AllPinNames.Add(PinNameStr);
+								}
+							}
+						}
+					}
+				}
+			}
+		};
+
+		for (UEdGraph* Graph : Blueprint->UbergraphPages)
+		{
+			ProcessGraph(Graph);
+		}
+
+		for (UEdGraph* Graph : Blueprint->FunctionGraphs)
+		{
+			ProcessGraph(Graph);
+		}
+
+		TArray<FString> SortedPinNames = AllPinNames.Array();
+		SortedPinNames.Sort();
+
+		for (const FString& PinName : SortedPinNames)
+		{
+			InputPinOptions->Add(MakeShared<FString>(PinName));
+		}
+	}
+}
+
 bool SCheckPropertyInitializationWidget::IsObjectProperty(const FString& PropertyName) const
 {
 	return ObjectPropertyNames.Contains(PropertyName);
 }
 
-void SCheckPropertyInitializationWidget::RebuildContent()
+bool SCheckPropertyInitializationWidget::IsLeftOperandBool() const
 {
-	if (!ScrollBox.IsValid() || Condition == nullptr)
+	if (Condition == nullptr)
 	{
-		return;
+		return false;
 	}
 
-	ScrollBox->ClearChildren();
-
-	for (int32 i = 0; i < Condition->Comparisons.Num(); ++i)
+	if (Condition->LeftOperandType == EPropertyOperandType::Property)
 	{
-		const int32 ComparisonIndex = i;
-		FPropertyComparison& Comparison = Condition->Comparisons[i];
-
-		auto FindInitialSelection = [](const TSharedPtr<TArray<TSharedPtr<FString>>>& Options, const FString& Value) -> TSharedPtr<FString>
+		if (Condition->LeftPropertyName.IsEmpty() || Blueprint == nullptr || Blueprint->GeneratedClass == nullptr)
 		{
-			if (!Options.IsValid() || Options->Num() == 0)
+			return false;
+		}
+
+		UObject* DefaultObject = Blueprint->GeneratedClass->GetDefaultObject();
+		if (DefaultObject == nullptr)
+		{
+			return false;
+		}
+
+		FProperty* Property = FindFProperty<FProperty>(DefaultObject->GetClass(), *Condition->LeftPropertyName);
+		if (Property == nullptr)
+		{
+			return false;
+		}
+
+		FBoolProperty* BoolProperty = CastField<FBoolProperty>(Property);
+		return BoolProperty != nullptr;
+	}
+	else if (Condition->LeftOperandType == EPropertyOperandType::InputPin)
+	{
+		if (Condition->LeftInputPinName.IsEmpty() || CurrentNode == nullptr)
+		{
+			return false;
+		}
+
+		for (UEdGraphPin* Pin : CurrentNode->Pins)
+		{
+			if (Pin != nullptr 
+				&& Pin->Direction == EGPD_Input 
+				&& Pin->PinName.ToString() == Condition->LeftInputPinName)
 			{
-				return nullptr;
+				return Pin->PinType.PinCategory == TEXT("bool");
 			}
-			for (const TSharedPtr<FString>& Option : *Options)
+		}
+
+		if (Blueprint != nullptr)
+		{
+			auto FindPinInGraph = [this](UEdGraph* Graph) -> bool
 			{
-				if (Option.IsValid() && *Option == Value)
+				if (Graph == nullptr)
 				{
-					return Option;
+					return false;
+				}
+
+				for (UEdGraphNode* GraphNode : Graph->Nodes)
+				{
+					if (GraphNode != nullptr)
+					{
+						for (UEdGraphPin* Pin : GraphNode->Pins)
+						{
+							if (Pin != nullptr 
+								&& Pin->Direction == EGPD_Input 
+								&& Pin->PinName.ToString() == Condition->LeftInputPinName)
+							{
+								return Pin->PinType.PinCategory == TEXT("bool");
+							}
+						}
+					}
+				}
+				return false;
+			};
+
+			for (UEdGraph* Graph : Blueprint->UbergraphPages)
+			{
+				if (FindPinInGraph(Graph))
+				{
+					return true;
 				}
 			}
-			return (*Options)[0];
-		};
 
-		const TSharedPtr<FString> InitialLeftProp = FindInitialSelection(PropertyOptions, Comparison.LeftPropertyName);
-
-		FString OperatorStr;
-		switch (Comparison.Operator)
-		{
-		case EPropertyComparisonOperator::Equal: OperatorStr = TEXT("=="); break;
-		case EPropertyComparisonOperator::NotEqual: OperatorStr = TEXT("!="); break;
-		case EPropertyComparisonOperator::Less: OperatorStr = TEXT("<"); break;
-		case EPropertyComparisonOperator::LessOrEqual: OperatorStr = TEXT("<="); break;
-		case EPropertyComparisonOperator::Greater: OperatorStr = TEXT(">"); break;
-		case EPropertyComparisonOperator::GreaterOrEqual: OperatorStr = TEXT(">="); break;
+			for (UEdGraph* Graph : Blueprint->FunctionGraphs)
+			{
+				if (FindPinInGraph(Graph))
+				{
+					return true;
+				}
+			}
 		}
-		const TSharedPtr<FString> InitialOperator = FindInitialSelection(OperatorOptions, OperatorStr);
 
-		const FString OperandTypeStr = (Comparison.RightOperandType == EPropertyOperandType::Property) ? TEXT("Property") : TEXT("Constant");
-		const TSharedPtr<FString> InitialOperandType = FindInitialSelection(OperandTypeOptions, OperandTypeStr);
-
-		TSharedPtr<FString> InitialRightProp = FindInitialSelection(PropertyOptions, Comparison.RightPropertyName);
-
-		ScrollBox->AddSlot()
-			.Padding(6.0f)
-			[
-				SNew(SVerticalBox)
-				+ SVerticalBox::Slot()
-				.AutoHeight()
-				[
-					SNew(STextBlock)
-					.Text(FText::Format(LOCTEXT("ComparisonLabel", "Comparison {0}:"), ComparisonIndex + 1))
-					.Font(FCoreStyle::GetDefaultFontStyle("Bold", 10))
-				]
-				+ SVerticalBox::Slot()
-				.AutoHeight()
-				.Padding(0, 4, 0, 0)
-				[
-					SNew(SHorizontalBox)
-					+ SHorizontalBox::Slot()
-					.FillWidth(0.4f)
-					[
-						SNew(SVerticalBox)
-						+ SVerticalBox::Slot()
-						.AutoHeight()
-						[
-							SNew(SComboBox<TSharedPtr<FString>>)
-							.OptionsSource(PropertyOptions.Get())
-							.OnGenerateWidget_Lambda([](TSharedPtr<FString> InItem)
-								{
-									return SNew(STextBlock).Text(FText::FromString(InItem.IsValid() ? *InItem : FString("None")));
-								})
-							.OnSelectionChanged_Lambda([this, ComparisonIndex](TSharedPtr<FString> NewSelection, ESelectInfo::Type SelectInfo)
-								{
-									if (SelectInfo != ESelectInfo::Direct && NewSelection.IsValid() && Condition->Comparisons.IsValidIndex(ComparisonIndex))
-									{
-										Condition->Comparisons[ComparisonIndex].LeftPropertyName = *NewSelection;
-										if (!IsObjectProperty(*NewSelection))
-										{
-											Condition->Comparisons[ComparisonIndex].bUseObjectNameForLeftProperty = false;
-										}
-										RebuildContent();
-									}
-								})
-							.InitiallySelectedItem(InitialLeftProp)
-							[
-								SNew(STextBlock)
-								.Text_Lambda([this, ComparisonIndex]()
-									{
-										if (Condition->Comparisons.IsValidIndex(ComparisonIndex))
-										{
-											return FText::FromString(Condition->Comparisons[ComparisonIndex].LeftPropertyName.IsEmpty() ? TEXT("(Select Property)") : Condition->Comparisons[ComparisonIndex].LeftPropertyName);
-										}
-										return FText::FromString(TEXT("(Select Property)"));
-									})
-							]
-						]
-						+ SVerticalBox::Slot()
-						.AutoHeight()
-						.Padding(0.f, 4.f, 0.f, 0.f)
-						[
-							SNew(SCheckBox)
-							.Visibility_Lambda([this, ComparisonIndex]()
-								{
-									return (Condition->Comparisons.IsValidIndex(ComparisonIndex) && IsObjectProperty(Condition->Comparisons[ComparisonIndex].LeftPropertyName)) ? EVisibility::Visible : EVisibility::Collapsed;
-								})
-							.IsChecked_Lambda([this, ComparisonIndex]()
-								{
-									return (Condition->Comparisons.IsValidIndex(ComparisonIndex) && Condition->Comparisons[ComparisonIndex].bUseObjectNameForLeftProperty) ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
-								})
-							.OnCheckStateChanged_Lambda([this, ComparisonIndex](ECheckBoxState NewState)
-								{
-									if (Condition->Comparisons.IsValidIndex(ComparisonIndex))
-									{
-										Condition->Comparisons[ComparisonIndex].bUseObjectNameForLeftProperty = (NewState == ECheckBoxState::Checked);
-									}
-								})
-							[
-								SNew(STextBlock)
-								.Text(LOCTEXT("CompareLeftByName", "Compare by object name"))
-							]
-						]
-					]
-					+ SHorizontalBox::Slot()
-					.FillWidth(0.2f)
-					.Padding(4, 0, 4, 0)
-					[
-						SNew(SComboBox<TSharedPtr<FString>>)
-						.OptionsSource(OperatorOptions.Get())
-						.OnGenerateWidget_Lambda([](TSharedPtr<FString> InItem)
-							{
-								return SNew(STextBlock).Text(FText::FromString(InItem.IsValid() ? *InItem : FString("==")));
-							})
-						.OnSelectionChanged_Lambda([this, ComparisonIndex](TSharedPtr<FString> NewSelection, ESelectInfo::Type SelectInfo)
-							{
-								if (SelectInfo != ESelectInfo::Direct && NewSelection.IsValid() && Condition->Comparisons.IsValidIndex(ComparisonIndex))
-								{
-									if (*NewSelection == TEXT("=="))
-										Condition->Comparisons[ComparisonIndex].Operator = EPropertyComparisonOperator::Equal;
-									else if (*NewSelection == TEXT("!="))
-										Condition->Comparisons[ComparisonIndex].Operator = EPropertyComparisonOperator::NotEqual;
-									else if (*NewSelection == TEXT("<"))
-										Condition->Comparisons[ComparisonIndex].Operator = EPropertyComparisonOperator::Less;
-									else if (*NewSelection == TEXT("<="))
-										Condition->Comparisons[ComparisonIndex].Operator = EPropertyComparisonOperator::LessOrEqual;
-									else if (*NewSelection == TEXT(">"))
-										Condition->Comparisons[ComparisonIndex].Operator = EPropertyComparisonOperator::Greater;
-									else if (*NewSelection == TEXT(">="))
-										Condition->Comparisons[ComparisonIndex].Operator = EPropertyComparisonOperator::GreaterOrEqual;
-								}
-							})
-						.InitiallySelectedItem(InitialOperator)
-						[
-							SNew(STextBlock)
-							.Text_Lambda([this, ComparisonIndex]()
-								{
-									if (Condition->Comparisons.IsValidIndex(ComparisonIndex))
-									{
-										FString OpStr;
-										switch (Condition->Comparisons[ComparisonIndex].Operator)
-										{
-										case EPropertyComparisonOperator::Equal: OpStr = TEXT("=="); break;
-										case EPropertyComparisonOperator::NotEqual: OpStr = TEXT("!="); break;
-										case EPropertyComparisonOperator::Less: OpStr = TEXT("<"); break;
-										case EPropertyComparisonOperator::LessOrEqual: OpStr = TEXT("<="); break;
-										case EPropertyComparisonOperator::Greater: OpStr = TEXT(">"); break;
-										case EPropertyComparisonOperator::GreaterOrEqual: OpStr = TEXT(">="); break;
-										}
-										return FText::FromString(OpStr);
-									}
-									return FText::FromString(TEXT("=="));
-								})
-						]
-					]
-					+ SHorizontalBox::Slot()
-					.FillWidth(0.4f)
-					[
-						SNew(SHorizontalBox)
-						+ SHorizontalBox::Slot()
-						.FillWidth(0.3f)
-						[
-							SNew(SComboBox<TSharedPtr<FString>>)
-							.OptionsSource(OperandTypeOptions.Get())
-							.OnGenerateWidget_Lambda([](TSharedPtr<FString> InItem)
-								{
-									return SNew(STextBlock).Text(FText::FromString(InItem.IsValid() ? *InItem : FString("Constant")));
-								})
-							.OnSelectionChanged_Lambda([this, ComparisonIndex](TSharedPtr<FString> NewSelection, ESelectInfo::Type SelectInfo)
-								{
-									if (SelectInfo != ESelectInfo::Direct && NewSelection.IsValid() && Condition->Comparisons.IsValidIndex(ComparisonIndex))
-									{
-										Condition->Comparisons[ComparisonIndex].RightOperandType = (*NewSelection == TEXT("Property")) ? EPropertyOperandType::Property : EPropertyOperandType::Constant;
-										RebuildContent();
-									}
-								})
-							.InitiallySelectedItem(InitialOperandType)
-							[
-								SNew(STextBlock)
-								.Text_Lambda([this, ComparisonIndex]()
-									{
-										if (Condition->Comparisons.IsValidIndex(ComparisonIndex))
-										{
-											return FText::FromString((Condition->Comparisons[ComparisonIndex].RightOperandType == EPropertyOperandType::Property) ? TEXT("Property") : TEXT("Constant"));
-										}
-										return FText::FromString(TEXT("Constant"));
-									})
-							]
-						]
-						+ SHorizontalBox::Slot()
-						.FillWidth(0.7f)
-						.Padding(4, 0, 0, 0)
-						[
-							// Show property selector or constant input based on operand type
-							SNew(SBox)
-							[
-								SNew(SVerticalBox)
-								+ SVerticalBox::Slot()
-								.AutoHeight()
-								[
-									SNew(SComboBox<TSharedPtr<FString>>)
-									.Visibility_Lambda([this, ComparisonIndex]()
-										{
-											return (Condition->Comparisons.IsValidIndex(ComparisonIndex) && Condition->Comparisons[ComparisonIndex].RightOperandType == EPropertyOperandType::Property) ? EVisibility::Visible : EVisibility::Collapsed;
-										})
-									.OptionsSource(PropertyOptions.Get())
-									.OnGenerateWidget_Lambda([](TSharedPtr<FString> InItem)
-										{
-											return SNew(STextBlock).Text(FText::FromString(InItem.IsValid() ? *InItem : FString("None")));
-										})
-									.OnSelectionChanged_Lambda([this, ComparisonIndex](TSharedPtr<FString> NewSelection, ESelectInfo::Type SelectInfo)
-										{
-											if (SelectInfo != ESelectInfo::Direct && NewSelection.IsValid() && Condition->Comparisons.IsValidIndex(ComparisonIndex))
-											{
-												Condition->Comparisons[ComparisonIndex].RightPropertyName = *NewSelection;
-												if (!IsObjectProperty(*NewSelection))
-												{
-													Condition->Comparisons[ComparisonIndex].bUseObjectNameForRightProperty = false;
-												}
-												RebuildContent();
-											}
-										})
-									.InitiallySelectedItem(InitialRightProp)
-									[
-										SNew(STextBlock)
-										.Text_Lambda([this, ComparisonIndex]()
-											{
-												if (Condition->Comparisons.IsValidIndex(ComparisonIndex))
-												{
-													return FText::FromString(Condition->Comparisons[ComparisonIndex].RightPropertyName.IsEmpty() ? TEXT("(Select Property)") : Condition->Comparisons[ComparisonIndex].RightPropertyName);
-												}
-												return FText::FromString(TEXT("(Select Property)"));
-											})
-									]
-								]
-								+ SVerticalBox::Slot()
-								.AutoHeight()
-								.Padding(0.f, 4.f, 0.f, 0.f)
-								[
-									SNew(SCheckBox)
-									.Visibility_Lambda([this, ComparisonIndex]()
-										{
-											return (Condition->Comparisons.IsValidIndex(ComparisonIndex)
-												&& Condition->Comparisons[ComparisonIndex].RightOperandType == EPropertyOperandType::Property
-												&& IsObjectProperty(Condition->Comparisons[ComparisonIndex].RightPropertyName))
-												? EVisibility::Visible
-												: EVisibility::Collapsed;
-										})
-									.IsChecked_Lambda([this, ComparisonIndex]()
-										{
-											return (Condition->Comparisons.IsValidIndex(ComparisonIndex)
-												&& Condition->Comparisons[ComparisonIndex].bUseObjectNameForRightProperty)
-												? ECheckBoxState::Checked
-												: ECheckBoxState::Unchecked;
-										})
-									.OnCheckStateChanged_Lambda([this, ComparisonIndex](ECheckBoxState NewState)
-										{
-											if (Condition->Comparisons.IsValidIndex(ComparisonIndex))
-											{
-												Condition->Comparisons[ComparisonIndex].bUseObjectNameForRightProperty = (NewState == ECheckBoxState::Checked);
-											}
-										})
-									[
-										SNew(STextBlock)
-										.Text(LOCTEXT("CompareRightByName", "Compare by object name"))
-									]
-								]
-								+ SVerticalBox::Slot()
-								.AutoHeight()
-								[
-									SNew(SEditableTextBox)
-									.Visibility_Lambda([this, ComparisonIndex]()
-										{
-											return (Condition->Comparisons.IsValidIndex(ComparisonIndex) && Condition->Comparisons[ComparisonIndex].RightOperandType == EPropertyOperandType::Constant) ? EVisibility::Visible : EVisibility::Collapsed;
-										})
-									.Text_Lambda([this, ComparisonIndex]()
-										{
-											if (Condition->Comparisons.IsValidIndex(ComparisonIndex))
-											{
-												return FText::FromString(Condition->Comparisons[ComparisonIndex].ConstantValue);
-											}
-											return FText::GetEmpty();
-										})
-									.OnTextChanged_Lambda([this, ComparisonIndex](const FText& NewText)
-										{
-											if (Condition->Comparisons.IsValidIndex(ComparisonIndex))
-											{
-												Condition->Comparisons[ComparisonIndex].ConstantValue = NewText.ToString();
-											}
-										})
-									.HintText(LOCTEXT("ConstantValueHint", "Enter constant value"))
-								]
-							]
-						]
-					]
-				]
-			];
+		return false;
 	}
+
+	return false;
 }
+
 
 #undef LOCTEXT_NAMESPACE
 

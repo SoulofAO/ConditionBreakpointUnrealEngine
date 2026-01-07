@@ -40,7 +40,7 @@ bool URepeatDebugCondition::CheckValidCondition(UBlueprint* Blueprint) const
 	return true; // Always valid as long as we have a threshold
 }
 
-TSharedPtr<SWidget> URepeatDebugCondition::InitializationWidget(UBlueprint* Blueprint)
+TSharedPtr<SWidget> URepeatDebugCondition::InitializationWidget(UBlueprint* Blueprint, const UEdGraphNode* Node)
 {
 	TSharedPtr<TArray<TSharedPtr<FString>>> ComparisonOptions = MakeShared<TArray<TSharedPtr<FString>>>();
 	ComparisonOptions->Add(MakeShared<FString>(TEXT("Less")));

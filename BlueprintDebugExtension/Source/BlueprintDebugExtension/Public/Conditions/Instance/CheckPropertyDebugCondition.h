@@ -18,87 +18,27 @@ struct FFrame;
 class UExecBlueprintBreakpointContext;
 class UBlueprint;
 class SWidget;
-class SScrollBox;
+class UEdGraphNode;
+class UEdGraphPin;
 
-/**
- * Comparison operators for property checks
- */
 UENUM()
 enum class EPropertyComparisonOperator : uint8
 {
-	Equal,          // ==
-	NotEqual,       // !=
-	Less,           // <
-	LessOrEqual,    // <=
-	Greater,        // >
-	GreaterOrEqual  // >=
+	Equal,
+	NotEqual,
+	Less,
+	LessOrEqual,
+	Greater,
+	GreaterOrEqual
 };
 
-/**
- * Type of operand in comparison
- */
 UENUM()
 enum class EPropertyOperandType : uint8
 {
-	Property,       // Use another property value
-	Constant        // Use constant value
+	Property,
+	InputPin,
+	Constant
 };
-
-/**
- * Logical operator for combining multiple comparisons
- */
-UENUM()
-enum class EPropertyLogicalOperator : uint8
-{
-	And,            // &&
-	Or              // ||
-};
-
-/**
- * Single property comparison operation
- */
-USTRUCT()
-struct FPropertyComparison
-{
-	GENERATED_BODY()
-
-	// Left operand: property name
-	UPROPERTY(SaveGame)
-	FString LeftPropertyName;
-
-	// If left operand is FObjectProperty, compare object name instead of export text
-	UPROPERTY(SaveGame)
-	bool bUseObjectNameForLeftProperty = false;
-
-	// Comparison operator
-	UPROPERTY(SaveGame)
-	EPropertyComparisonOperator Operator = EPropertyComparisonOperator::Equal;
-
-	// Right operand type
-	UPROPERTY(SaveGame)
-	EPropertyOperandType RightOperandType = EPropertyOperandType::Constant;
-
-	// Right operand: property name (if RightOperandType == Property)
-	UPROPERTY(SaveGame)
-	FString RightPropertyName;
-
-	// If right operand (property type) is FObjectProperty, compare object name
-	UPROPERTY(SaveGame)
-	bool bUseObjectNameForRightProperty = false;
-
-	// Right operand: constant value as string (if RightOperandType == Constant)
-	UPROPERTY(SaveGame)
-	FString ConstantValue;
-
-	// Logical operator to combine with next comparison (if any)
-	UPROPERTY(SaveGame)
-	EPropertyLogicalOperator LogicalOperator = EPropertyLogicalOperator::And;
-};
-
-/**
- * Condition that checks property values using a chain of comparison operations
- * Supports comparing properties with constants or other properties
- */
 
 UCLASS(NotBlueprintable)
 class BLUEPRINTDEBUGEXTENSION_API UCheckPropertyDebugCondition : public UBlueprintDebugExtensionCondition
@@ -110,40 +50,52 @@ public:
 
 	virtual bool CheckValidCondition(UBlueprint* Blueprint) const override;
 
-	virtual TSharedPtr<SWidget> InitializationWidget(UBlueprint* Blueprint) override;
+	virtual TSharedPtr<SWidget> InitializationWidget(UBlueprint* Blueprint, const UEdGraphNode* Node) override;
 
-	// List of comparison operations to evaluate
 	UPROPERTY(SaveGame)
-	TArray<FPropertyComparison> Comparisons;
+	EPropertyOperandType LeftOperandType = EPropertyOperandType::Property;
+
+	UPROPERTY(SaveGame)
+	FString LeftPropertyName;
+
+	UPROPERTY(SaveGame)
+	FString LeftInputPinName;
+
+	UPROPERTY(SaveGame)
+	bool bUseObjectNameForLeftProperty = false;
+
+	UPROPERTY(SaveGame)
+	EPropertyComparisonOperator Operator = EPropertyComparisonOperator::Equal;
+
+	UPROPERTY(SaveGame)
+	EPropertyOperandType RightOperandType = EPropertyOperandType::Constant;
+
+	UPROPERTY(SaveGame)
+	FString RightPropertyName;
+
+	UPROPERTY(SaveGame)
+	FString RightInputPinName;
+
+	UPROPERTY(SaveGame)
+	bool bUseObjectNameForRightProperty = false;
+
+	UPROPERTY(SaveGame)
+	FString ConstantValue;
 
 	friend class SCheckPropertyInitializationWidget;
 
 protected:
-	/**
-	 * Get property value from object by name
-	 * @param Object Object to get property from
-	 * @param PropertyName Name of the property
-	 * @param bPreferObjectName If property is FObjectProperty, use object name instead of export text
-	 * @param OutValue Output string representation of the value
-	 * @return true if property was found and value extracted
-	 */
 	bool GetPropertyValue(const UObject* Object, const FString& PropertyName, bool bPreferObjectName, FString& OutValue) const;
 
-	/**
-	 * Compare two values using the specified operator
-	 * @param LeftValue Left operand as string
-	 * @param RightValue Right operand as string
-	 * @param Operator Comparison operator
-	 * @return Result of comparison
-	 */
-	bool CompareValues(const FString& LeftValue, const FString& RightValue, EPropertyComparisonOperator Operator) const;
+	bool GetInputPinValue(const UEdGraphNode* Node, const FString& PinName, FString& OutValue) const;
 
-	/**
-	 * Get all available properties from object for selection
-	 * @param Object Object to get properties from
-	 * @param OutPropertyNames Output array of property names
-	 */
+	UEdGraphNode* GetCurrentNodeFromStackFrame(const UObject* ActiveObject, const FFrame& StackFrame) const;
+
+	bool CompareValues(const FString& LeftValue, const FString& RightValue) const;
+
 	void GetAvailableProperties(const UObject* Object, TArray<FString>& OutPropertyNames) const;
+
+	void GetAvailableInputPins(const UEdGraphNode* Node, TArray<FString>& OutPinNames) const;
 };
 
 class SCheckPropertyInitializationWidget : public SCompoundWidget
@@ -151,6 +103,7 @@ class SCheckPropertyInitializationWidget : public SCompoundWidget
 public:
 	SLATE_BEGIN_ARGS(SCheckPropertyInitializationWidget) {}
 		SLATE_ARGUMENT(UBlueprint*, Blueprint)
+		SLATE_ARGUMENT(const UEdGraphNode*, Node)
 		SLATE_ARGUMENT(UCheckPropertyDebugCondition*, Condition)
 	SLATE_END_ARGS()
 
@@ -158,15 +111,19 @@ public:
 
 private:
 	void BuildPropertyOptions(UBlueprint* Blueprint);
-	void RebuildContent();
+	void BuildInputPinOptions(const UEdGraphNode* Node);
+	TSharedRef<SWidget> RebuildContent();
 	bool IsObjectProperty(const FString& PropertyName) const;
+	bool IsLeftOperandBool() const;
 
 private:
 	UBlueprint* Blueprint = nullptr;
+	UEdGraphNode* CurrentNode = nullptr;
 	UCheckPropertyDebugCondition* Condition = nullptr;
 	TSharedPtr<TArray<TSharedPtr<FString>>> PropertyOptions;
+	TSharedPtr<TArray<TSharedPtr<FString>>> InputPinOptions;
 	TSharedPtr<TArray<TSharedPtr<FString>>> OperatorOptions;
 	TSharedPtr<TArray<TSharedPtr<FString>>> OperandTypeOptions;
+	TSharedPtr<TArray<TSharedPtr<FString>>> LeftOperandTypeOptions;
 	TSet<FString> ObjectPropertyNames;
-	TSharedPtr<SScrollBox> ScrollBox;
 };

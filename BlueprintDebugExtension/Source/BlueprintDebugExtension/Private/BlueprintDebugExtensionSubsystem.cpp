@@ -42,6 +42,7 @@
 #include "EdGraph/EdGraphNode.h"
 #include "Engine/Blueprint.h"
 #include "Interfaces/IPluginManager.h"
+#include "UObject/UObjectIterator.h"
 
 
 static const TArray<TSharedPtr<FString>>& GetConditionTypeOptions()
@@ -52,6 +53,15 @@ static const TArray<TSharedPtr<FString>>& GetConditionTypeOptions()
 		MakeShared<FString>(TEXT("Or"))
 	};
 	return Options;
+}
+
+static FGuid GetNodeGuidSafe(const UEdGraphNode* Node)
+{
+	if (Node != nullptr)
+	{
+		return Node->NodeGuid;
+	}
+	return FGuid();
 }
 
 void UBlueprintDebugExtensionSubsystem::OpenConditionEditorWindow(UBlueprint* Blueprint, const UEdGraphNode* Node)
@@ -83,11 +93,17 @@ void UBlueprintDebugExtensionSubsystem::OpenConditionEditorWindow(UBlueprint* Bl
 
 void UBlueprintDebugExtensionSubsystem::AddNewConditions(UEdGraphNode* Node, TArray<FBlueprintDebugExtensionConditionData> NewConditions)
 {
-    if (Conditions.Contains(Node))
+    if (Node == nullptr)
     {
-        Conditions.Remove(Node);
+        return;
     }
-    Conditions.Add(Node, FArrayBlueprintDebugExtensionConditionData(NewConditions));
+
+    FGuid NodeGuid = Node->NodeGuid;
+    if (Conditions.Contains(NodeGuid))
+    {
+        Conditions.Remove(NodeGuid);
+    }
+    Conditions.Add(NodeGuid, FArrayBlueprintDebugExtensionConditionData(NewConditions));
 
     if (NewConditions.Num() > 0)
     {
@@ -127,7 +143,13 @@ void UBlueprintDebugExtensionSubsystem::AddNewConditions(UEdGraphNode* Node, TAr
 
 bool UBlueprintDebugExtensionSubsystem::CheckValidConditions(UEdGraphNode* Node)
 {
-    if (!Conditions.Contains(Node))
+    if (Node == nullptr)
+    {
+        return false;
+    }
+
+    FGuid NodeGuid = Node->NodeGuid;
+    if (!Conditions.Contains(NodeGuid))
     {
         return false;
     }
@@ -136,7 +158,7 @@ bool UBlueprintDebugExtensionSubsystem::CheckValidConditions(UEdGraphNode* Node)
 
     FBlueprintBreakpoint* BlueprintBreakpoint = FKismetDebugUtilities::FindBreakpointForNode(Node, Blueprint, false);
 
-    for (FBlueprintDebugExtensionConditionData ConditionData : Conditions.Find(Node)->Conditions)
+    for (FBlueprintDebugExtensionConditionData ConditionData : Conditions.Find(NodeGuid)->Conditions)
     {
         if (!ConditionData.Condition->CheckValidCondition(Blueprint))
         {
@@ -149,9 +171,15 @@ bool UBlueprintDebugExtensionSubsystem::CheckValidConditions(UEdGraphNode* Node)
 
 void UBlueprintDebugExtensionSubsystem::RemoveCondition(UEdGraphNode* RemoveNode)
 {
-    if (Conditions.Contains(RemoveNode))
+    if (RemoveNode == nullptr)
     {
-        Conditions.Remove(RemoveNode);
+        return;
+    }
+
+    FGuid NodeGuid = RemoveNode->NodeGuid;
+    if (Conditions.Contains(NodeGuid))
+    {
+        Conditions.Remove(NodeGuid);
     }
 
     RemoveNode->Modify();
@@ -202,23 +230,66 @@ void UBlueprintDebugExtensionSubsystem::SaveConditions()
     TSharedRef<FJsonObject> RootJson = MakeShared<FJsonObject>();
     TArray<TSharedPtr<FJsonValue>> EntriesArray;
 
-    for (const TPair<UEdGraphNode*, FArrayBlueprintDebugExtensionConditionData >& Pair : Conditions)
+    for (const TPair<FGuid, FArrayBlueprintDebugExtensionConditionData >& Pair : Conditions)
     {
-        UEdGraphNode* Node = Pair.Key;
+        FGuid NodeGuid = Pair.Key;
         const TArray<FBlueprintDebugExtensionConditionData>& ConditionArray = Pair.Value.Conditions;
 
-        if (Node == nullptr)
+        UEdGraphNode* FoundNode = nullptr;
+        UBlueprint* FoundBlueprint = nullptr;
+
+        for (TObjectIterator<UBlueprint> BlueprintIt; BlueprintIt; ++BlueprintIt)
+        {
+            UBlueprint* Blueprint = *BlueprintIt;
+            if (Blueprint == nullptr)
+            {
+                continue;
+            }
+
+            TArray<UEdGraph*> AllGraphs;
+            Blueprint->GetAllGraphs(AllGraphs);
+
+            for (UEdGraph* Graph : AllGraphs)
+            {
+                if (Graph == nullptr)
+                {
+                    continue;
+                }
+
+                for (UEdGraphNode* Node : Graph->Nodes)
+                {
+                    if (Node != nullptr && Node->NodeGuid == NodeGuid)
+                    {
+                        FoundNode = Node;
+                        FoundBlueprint = Blueprint;
+                        break;
+                    }
+                }
+
+                if (FoundNode != nullptr)
+                {
+                    break;
+                }
+            }
+
+            if (FoundNode != nullptr)
+            {
+                break;
+            }
+        }
+
+        if (FoundNode == nullptr || FoundBlueprint == nullptr)
         {
             continue;
         }
 
-        UEdGraph* Graph = Node->GetGraph();
+        UEdGraph* Graph = FoundNode->GetGraph();
         if (Graph == nullptr)
         {
             continue;
         }
 
-        // Найти Blueprint-владелец по внешним объектам графа
+        // пїЅпїЅпїЅпїЅпїЅ Blueprint-пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
         UObject* Outer = Graph;
         UBlueprint* Blueprint = nullptr;
         while (Outer != nullptr)
@@ -237,8 +308,8 @@ void UBlueprintDebugExtensionSubsystem::SaveConditions()
         }
 
         TSharedRef<FJsonObject> EntryJson = MakeShared<FJsonObject>();
-        EntryJson->SetStringField(TEXT("BlueprintPath"), Blueprint->GetPathName());
-        EntryJson->SetStringField(TEXT("NodeGuid"), Node->NodeGuid.ToString());
+        EntryJson->SetStringField(TEXT("BlueprintPath"), FoundBlueprint->GetPathName());
+        EntryJson->SetStringField(TEXT("NodeGuid"), NodeGuid.ToString());
 
         TArray<TSharedPtr<FJsonValue>> ConditionsJsonArray;
 
@@ -258,13 +329,13 @@ void UBlueprintDebugExtensionSubsystem::SaveConditions()
             ConditionJson->SetBoolField(TEXT("HasConditionObject"), true);
             ConditionJson->SetStringField(TEXT("ConditionClass"), ConditionObj->GetClass()->GetPathName());
 
-            // Сериализуем ТОЛЬКО свойства с флагом CPF_SaveGame
+            // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅ CPF_SaveGame
             TSharedRef<FJsonObject> PropsJson = MakeShared<FJsonObject>();
             for (TFieldIterator<FProperty> PropIt(ConditionObj->GetClass()); PropIt; ++PropIt)
             {
                 FProperty* Property = *PropIt;
 
-                // Пропускаем transient и properties без SaveGame
+                // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ transient пїЅ properties пїЅпїЅпїЅ SaveGame
                 if (Property->HasAllPropertyFlags(CPF_Transient))
                 {
                     continue;
@@ -386,7 +457,7 @@ void UBlueprintDebugExtensionSubsystem::LoadConditions()
             continue;
         }
 
-        // Найти узел по NodeGuid во всех графах
+        // пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅ NodeGuid пїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
         UEdGraphNode* FoundNode = nullptr;
         TArray<UEdGraph*> AllGraphs;
         Blueprint->GetAllGraphs(AllGraphs);
@@ -420,7 +491,7 @@ void UBlueprintDebugExtensionSubsystem::LoadConditions()
 
         if (FoundNode == nullptr)
         {
-            // Узел не найден — возможно, был удалён/переименован
+            // пїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ/пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
             continue;
         }
 
@@ -485,7 +556,7 @@ void UBlueprintDebugExtensionSubsystem::LoadConditions()
                 }
             }
 
-            // Создаём экземпляр условия (RF_Transient, Outer = this subsystem)
+            // пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ (RF_Transient, Outer = this subsystem)
             UBlueprintDebugExtensionCondition* NewCondition = NewObject<UBlueprintDebugExtensionCondition>(this, ConditionClass);
             if (NewCondition == nullptr)
             {
@@ -494,7 +565,7 @@ void UBlueprintDebugExtensionSubsystem::LoadConditions()
                 continue;
             }
 
-            // Восстанавливаем только свойства с CPF_SaveGame
+            // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ CPF_SaveGame
             const TSharedPtr<FJsonObject>* PropsJsonPtr = nullptr;
             if (CondObj->TryGetObjectField(TEXT("Properties"), PropsJsonPtr) && PropsJsonPtr != nullptr)
             {
@@ -530,7 +601,7 @@ void UBlueprintDebugExtensionSubsystem::LoadConditions()
             LoadedConditionArray.Add(DataItem);
         }
 
-        Conditions.Add(FoundNode, LoadedConditionArray);
+        Conditions.Add(NodeGuid, LoadedConditionArray);
     }
 }
 
@@ -545,7 +616,7 @@ void UBlueprintDebugExtensionSubsystem::Initialize(FSubsystemCollectionBase& Col
 
 void UBlueprintDebugExtensionSubsystem::OnBeginPIE(bool bIsSimulating)
 {
-    for (TPair<UEdGraphNode*, FArrayBlueprintDebugExtensionConditionData>& Pair : Conditions)
+    for (TPair<FGuid, FArrayBlueprintDebugExtensionConditionData>& Pair : Conditions)
     {
         Pair.Value.Context = NewObject<UExecBlueprintBreakpointContext>(this);
     }
@@ -558,28 +629,72 @@ void UBlueprintDebugExtensionSubsystem::Deinitialize()
 
 bool UBlueprintDebugExtensionSubsystem::Tick(float DeltaTime)
 {
-    TArray<UEdGraphNode*> ConditionsToRemove;
+    TArray<FGuid> ConditionsToRemove;
 
-    for (TPair<UEdGraphNode*, FArrayBlueprintDebugExtensionConditionData> Pair : Conditions)
+    for (const TPair<FGuid, FArrayBlueprintDebugExtensionConditionData>& Pair : Conditions)
     {
-        if (!Pair.Key)
+        FGuid NodeGuid = Pair.Key;
+
+        UEdGraphNode* FoundNode = nullptr;
+        UBlueprint* OwnerBlueprint = nullptr;
+
+        for (TObjectIterator<UBlueprint> BlueprintIt; BlueprintIt; ++BlueprintIt)
         {
-            ConditionsToRemove.Add(Pair.Key);
+            UBlueprint* Blueprint = *BlueprintIt;
+            if (Blueprint == nullptr)
+            {
+                continue;
+            }
+
+            TArray<UEdGraph*> AllGraphs;
+            Blueprint->GetAllGraphs(AllGraphs);
+
+            for (UEdGraph* Graph : AllGraphs)
+            {
+                if (Graph == nullptr)
+                {
+                    continue;
+                }
+
+                for (UEdGraphNode* Node : Graph->Nodes)
+                {
+                    if (Node != nullptr && Node->NodeGuid == NodeGuid)
+                    {
+                        FoundNode = Node;
+                        OwnerBlueprint = Blueprint;
+                        break;
+                    }
+                }
+
+                if (FoundNode != nullptr)
+                {
+                    break;
+                }
+            }
+
+            if (FoundNode != nullptr)
+            {
+                break;
+            }
+        }
+
+        if (FoundNode == nullptr)
+        {
+            ConditionsToRemove.Add(NodeGuid);
             continue;
         }
 
-        UBlueprint* OwnerBlueprint = FBlueprintEditorUtils::FindBlueprintForNode(Pair.Key);
-        FBlueprintBreakpoint* BlueprintBreakpoint = FKismetDebugUtilities::FindBreakpointForNode(Pair.Key, OwnerBlueprint, false);
+        FBlueprintBreakpoint* BlueprintBreakpoint = FKismetDebugUtilities::FindBreakpointForNode(FoundNode, OwnerBlueprint, false);
         if (!BlueprintBreakpoint)
         {
-			ConditionsToRemove.Add(Pair.Key);
+            ConditionsToRemove.Add(NodeGuid);
             continue;
         }
     }
 
-    for (UEdGraphNode* Pair : ConditionsToRemove)
+    for (const FGuid& NodeGuidToRemove : ConditionsToRemove)
     {
-        RemoveCondition(Pair);
+        Conditions.Remove(NodeGuidToRemove);
     }
     return true;
 }
@@ -596,13 +711,25 @@ bool UBlueprintDebugExtensionSubsystem::CheckCondition(const UObject* ActiveObje
 
     UEdGraphNode* CurrentNode = BGClass->DebugData.FindSourceNodeFromCodeLocation(Function, CodeOffset, true);
 
-    if (!Conditions.Contains(CurrentNode))
+    if (CurrentNode == nullptr)
     {
         return true;
     }
 
-    Conditions.Find(CurrentNode)->Context->BreakpointExecuteCount += 1;
-    TArray<FBlueprintDebugExtensionConditionData> ConditionsForBreakpoint = Conditions.Find(CurrentNode)->Conditions;
+    FGuid NodeGuid = CurrentNode->NodeGuid;
+    if (!Conditions.Contains(NodeGuid))
+    {
+        return true;
+    }
+
+    FArrayBlueprintDebugExtensionConditionData* ConditionData = Conditions.Find(NodeGuid);
+    if (ConditionData == nullptr)
+    {
+        return true;
+    }
+
+    ConditionData->Context->BreakpointExecuteCount += 1;
+    TArray<FBlueprintDebugExtensionConditionData> ConditionsForBreakpoint = ConditionData->Conditions;
 
     if (ConditionsForBreakpoint.Num() <= 0)
     {
@@ -621,17 +748,17 @@ bool UBlueprintDebugExtensionSubsystem::CheckCondition(const UObject* ActiveObje
     {
         if (Count == 0)
         {
-            bResult = Condition.Condition->CheckCondition(ActiveObject, StackFrame, Conditions.Find(CurrentNode)->Context);
+            bResult = Condition.Condition->CheckCondition(ActiveObject, StackFrame, ConditionData->Context);
         }
         else
         {
             if (Condition.ConditionType == EBlueprintDebugExtensionConditionType::Or)
             {
-                bResult = bResult || Condition.Condition->CheckCondition(ActiveObject, StackFrame, Conditions.Find(CurrentNode)->Context);
+                bResult = bResult || Condition.Condition->CheckCondition(ActiveObject, StackFrame, ConditionData->Context);
             }
             else if (Condition.ConditionType == EBlueprintDebugExtensionConditionType::And)
             {
-                bResult = bResult && Condition.Condition->CheckCondition(ActiveObject, StackFrame, Conditions.Find(CurrentNode)->Context);
+                bResult = bResult && Condition.Condition->CheckCondition(ActiveObject, StackFrame, ConditionData->Context);
             }
         }
         Count++;

@@ -44,7 +44,7 @@ bool UFunctionBindingDebugCondition::CheckValidCondition(UBlueprint* Blueprint) 
     return !FunctionName.IsEmpty();
 }
 
-TSharedPtr<SWidget> UFunctionBindingDebugCondition::InitializationWidget(UBlueprint* Blueprint)
+TSharedPtr<SWidget> UFunctionBindingDebugCondition::InitializationWidget(UBlueprint* Blueprint, const UEdGraphNode* Node)
 {
     if (Blueprint == nullptr || Blueprint->GeneratedClass == nullptr)
     {

@@ -17,7 +17,7 @@ bool UBlueprintDebugExtensionCondition::CheckValidCondition(UBlueprint* Blueprin
 	return true;
 }
 
-TSharedPtr<SWidget> UBlueprintDebugExtensionCondition::InitializationWidget(UBlueprint* Blueprint)
+TSharedPtr<SWidget> UBlueprintDebugExtensionCondition::InitializationWidget(UBlueprint* Blueprint, const UEdGraphNode* Node)
 {
 	return TSharedPtr<SWidget>();
 }
