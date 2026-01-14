@@ -20,7 +20,7 @@
 			"Name": "BlueprintDebugExtension",
 			"Type": "Editor",
 			"LoadingPhase": "PostEngineInit",
-			"PlatformAllowList": [ "Win64" ]
+			"PlatformAllowList": ["Win64","IOS","Linux"]
 		}
 	]
 }
