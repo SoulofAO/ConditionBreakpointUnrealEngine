@@ -19,7 +19,8 @@
 		{
 			"Name": "BlueprintDebugExtension",
 			"Type": "Editor",
-			"LoadingPhase": "PostEngineInit"
+			"LoadingPhase": "PostEngineInit",
+			"PlatformAllowList": [ "Win64" ]
 		}
 	]
 }
